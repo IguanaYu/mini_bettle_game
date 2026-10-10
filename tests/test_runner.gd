@@ -34,7 +34,136 @@ func _ready() -> void:
 	_test_xp_threshold()
 	_test_geo()
 	_test_balance()
+	_test_movement_a01()
+	_test_fireball_a02_a03()
+	_test_contact_a04()
+	_test_spawner_a15()
 	finish()
+
+
+# ---------- 集成测试辅助 ----------
+
+func _new_arena(disable_spawner := true) -> Arena:
+	## 新建一局 + 场地；默认关掉刷怪器保证条件可控（A15 用 false）。
+	## 注意：必须在第一次 step 之前关闭，否则 elapsed=0 的那次刷怪已经发生。
+	Game.start_run()
+	var a := Arena.new()
+	add_child(a)
+	if disable_spawner:
+		a.spawner.enabled = false
+	a.step_manual(0.0)
+	return a
+
+
+func _free_arena(a: Arena) -> void:
+	remove_child(a)
+	a.queue_free()
+	Game.return_to_menu()
+
+
+# ---------- 集成测试 ----------
+
+func _test_movement_a01() -> void:
+	section("A01 移动（水平与斜向同速）")
+	var a := _new_arena()
+	var p := a.player
+	run("初始位于原点", p.position == Vector2.ZERO)
+	Input.action_press("move_right")
+	for i in 60:
+		a.step_manual(1.0 / 60.0)
+	Input.action_release("move_right")
+	run("水平 1 秒移动约 220px", absf(p.position.x - 220.0) < 1.5, str(p.position))
+	var origin := p.position
+	Input.action_press("move_up")
+	Input.action_press("move_right")
+	for i in 60:
+		a.step_manual(1.0 / 60.0)
+	Input.action_release("move_up")
+	Input.action_release("move_right")
+	var dist := p.position.distance_to(origin)
+	run("斜向 1 秒也移动约 220px", absf(dist - 220.0) < 1.5, "dist=%.1f" % dist)
+	_free_arena(a)
+
+
+func _test_fireball_a02_a03() -> void:
+	section("A02 两发击杀 / A03 大步长扫掠不穿透")
+	var hits: Array = []
+	var on_hit := func(_id: int, _tid: int, _pos: Vector2, _el: int, killed: bool) -> void:
+		hits.append(killed)
+	EventBus.attack_hit.connect(on_hit)
+
+	# A02：30 血 20 伤，两发击杀，掉落一次击杀统计
+	var a := _new_arena()
+	a.spawner.enabled = false
+	var e := a.spawn_target(Vector2(300, 0), false)
+	for i in 240:  # 4 秒：1s 间隔两发 + 飞行时间
+		a.step_manual(1.0 / 60.0)
+	run("A02 恰好两次有效命中", hits.size() == 2, str(hits.size()))
+	run("A02 第二发击杀", hits.size() == 2 and hits[1] == true)
+	run("A02 击杀统计为 1", Game.run.kills == 1, str(Game.run.kills))
+	run("A02 弹体已清理", a.projectiles.balls.is_empty())
+	_free_arena(a)
+	hits.clear()
+
+	# A03：单步 480px（模拟低帧率大 delta），路径上 400px 处的敌人必须被命中
+	var a2 := _new_arena()
+	a2.spawner.enabled = false
+	var e2 := a2.spawn_target(Vector2(400, 0), false)
+	a2.step_manual(1.0 / 120.0)  # 触发发射
+	var fired := a2.projectiles.live_ball_count() > 0
+	run("A03 火球已发射", fired)
+	a2.step_manual(1.0)  # 一步 480px 穿越 400px 处
+	run("A03 大步长命中未穿透", fired and (e2.hp < a2.enemy_def.max_hp
+			or e2.state != GameEnums.EnemyState.ALIVE), "hp=%.1f" % e2.hp)
+	_free_arena(a2)
+	EventBus.attack_hit.disconnect(on_hit)
+
+
+func _test_contact_a04() -> void:
+	section("A04 接触伤害与无敌帧 / A09 死亡结算一次")
+	var a := _new_arena()
+	a.spawn_target(Vector2.ZERO, false)
+	a.spawn_target(Vector2(4, 0), false)
+	a.step_manual(1.0 / 60.0)
+	run("A04 双敌同帧只扣一次血", a.player.hp == 90, "hp=%d" % a.player.hp)
+	for i in 18:
+		a.step_manual(1.0 / 60.0)
+	run("A04 无敌期内不再扣血", a.player.hp == 90, "hp=%d" % a.player.hp)
+	for i in 48:
+		a.step_manual(1.0 / 60.0)
+	run("A04 无敌结束后恢复受伤", a.player.hp == 80, "hp=%d" % a.player.hp)
+	# A09：生命归零 → 结算一次并停止世界（直接压到濒死，接触一下即死）
+	a.player.hp = 10
+	a.player.iframe_timer = 0.0
+	a.step_manual(1.0 / 60.0)  # 本帧接触扣血至 0
+	a.step_manual(1.0 / 60.0)  # 下一帧帧首触发结算（死亡优先于其他检查）
+	run("A09 死亡后结算一次", Game.run.finished and not Game.run.result_win)
+	var elapsed_at_finish := Game.run.elapsed
+	for i in 30:
+		a.step_manual(1.0 / 60.0)
+	run("A09 结算后倒计时停止", is_equal_approx(Game.run.elapsed, elapsed_at_finish))
+	_free_arena(a)
+
+
+func _test_spawner_a15() -> void:
+	section("A15 刷怪上限与恢复刷新")
+	var a := _new_arena(false)  # 本测试需要刷怪器
+	a.spawner.max_alive_override = 3
+	for i in 1200:  # 20 秒（间隔 1.3s，无上限可刷 ~15 个）
+		a.step_manual(1.0 / 60.0)
+	var alive := a.live_enemy_count()
+	run("A15 存活不超过上限 3", alive <= 3, "alive=%d" % alive)
+	run("A15 期间确实在刷怪", alive >= 2, "alive=%d" % alive)
+	for e in a.enemies:
+		e.position = a.player.position + Vector2(5000, 0)
+	a.step_manual(1.0 / 60.0)
+	a.step_manual(1.0 / 60.0)
+	run("A15 超距回收清场", a.live_enemy_count() == 0, "left=%d" % a.enemies.size())
+	for i in 156:  # 2.6 秒 = 两个刷新间隔
+		a.step_manual(1.0 / 60.0)
+	alive = a.live_enemy_count()
+	run("A15 空出名额后恢复刷新且不补账", alive >= 1 and alive <= 3, "alive=%d" % alive)
+	_free_arena(a)
 
 
 func _test_project_config() -> void:
