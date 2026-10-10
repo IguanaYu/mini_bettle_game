@@ -1,0 +1,7 @@
+# Godot 4 generated files
+.godot/
+*.translation
+
+# OS
+Thumbs.db
+.DS_Store
