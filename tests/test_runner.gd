@@ -296,6 +296,11 @@ func _test_ui_smoke() -> void:
 	var up := load("res://balance/upgrades/fire_damage.tres") as UpgradeDef
 	levelup.show_choices([up], ["火球伤害 20 → 25"])
 	run("UI 面板全部构建成功", hud != null and pause != null and levelup != null and results != null and menu != null)
+	# 结构自检：面板根下确有内容（曾因 center_panel 双重挂载导致空面板）
+	run("PauseMenu 结构完整", pause.get_child_count() > 0, str(pause.get_child_count()))
+	run("ResultsPanel 结构完整", results.get_child_count() > 0, str(results.get_child_count()))
+	run("MainMenu 结构完整", menu.get_child_count() > 0, str(menu.get_child_count()))
+	run("LevelUpPanel 结构完整", levelup.get_child_count() > 0, str(levelup.get_child_count()))
 	for node in [hud, pause, levelup, results, menu]:
 		remove_child(node)
 		node.queue_free()

@@ -15,8 +15,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	visible = false
 
-	var panel := Ui.center_panel()
-	add_child(panel)
+	var panel := Ui.center_panel(self)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	box.custom_minimum_size = Vector2(360, 0)

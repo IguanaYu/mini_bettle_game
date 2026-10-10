@@ -35,17 +35,18 @@ static func spacer(h: float) -> Control:
 	return c
 
 
-static func center_panel() -> PanelContainer:
-	## 居中面板：全屏暗化背景 + CenterContainer + PanelContainer
+static func center_panel(parent: Control) -> PanelContainer:
+	## 居中面板：挂到 parent（全屏暗化背景 + CenterContainer + PanelContainer），
+	## 返回 PanelContainer 供调用方填充内容
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(root)
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.45)
-	full_rect(dim)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var root := Control.new()
-	full_rect(root)
 	root.add_child(dim)
 	var center := CenterContainer.new()
-	full_rect(center)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(center)
 	var panel := PanelContainer.new()
 	center.add_child(panel)
