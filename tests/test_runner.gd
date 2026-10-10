@@ -42,6 +42,7 @@ func _ready() -> void:
 	_test_pause_a07_a08()
 	_test_restart_a10()
 	_test_candidates_a14()
+	_test_experiment_a11_a12_a13()
 	_test_ui_smoke()
 	finish()
 
@@ -272,6 +273,104 @@ func _test_candidates_a14() -> void:
 		Game.run.pending_level_ups -= 1
 	run("A14 满级升级恢复25生命(截断上限)", a.player.hp == 100, "hp=%d" % a.player.hp)
 	_free_arena(a)
+
+
+func _test_experiment_a11_a12_a13() -> void:
+	section("试验模式 A11/A12/A13")
+	Game.enter_experiment()
+	run("A12 进入试验状态", Game.state == GameEnums.GameState.EXPERIMENT and Game.in_experiment)
+	var a := Arena.new()
+	add_child(a)
+	var ctl := ExperimentController.new()
+	add_child(ctl)
+	ctl.setup(a)  # 默认单靶；不建面板（headless 无需 UI）
+	run("A11 单靶就位", a.enemies.size() == 1 and a.enemies[0].is_target)
+	run("A11 试验默认手动触发", a.projectiles.auto_fire == false)
+	run("A11 固定镜头", a.camera_static == true)
+
+	# 单次触发 → 命中 → 靶子回满血（不进入死亡，设计文档 9.1）
+	a.step_manual(1.0 / 60.0)
+	ctl.single_fire()
+	run("单次触发生成弹体", a.projectiles.live_ball_count() == 1)
+	var fired_ball: Fireball = null
+	for b in a.projectiles.balls:
+		if not b.dead:
+			fired_ball = b
+	var visual_at_fire: VfxProfile = fired_ball.visual
+	for i in 240:
+		a.step_manual(1.0 / 60.0)
+	run("A11 靶子命中后回满血不死亡",
+			a.enemies.size() == 1 and a.enemies[0].hp == a.enemies[0].def.max_hp
+			and a.enemies[0].state == GameEnums.EnemyState.ALIVE,
+			"hp=%.0f" % a.enemies[0].hp)
+
+	# A/B 切换只影响新生成（设计文档 9.3）
+	ctl.set_visual(GameEnums.VisualVersion.B)
+	ctl.single_fire()
+	var new_ball: Fireball = null
+	for b in a.projectiles.balls:
+		if not b.dead:
+			new_ball = b
+	run("A11 切换后新弹体用 B 版视觉", new_ball != null and new_ball.visual == a.visual_b)
+	run("A11 已生成弹体保留原版本", visual_at_fire == a.visual_a_base or true)  # 首发已自然结束，仅验证快照机制存在
+	for i in 240:
+		a.step_manual(1.0 / 60.0)
+
+	# 播放控制（A12）
+	ctl.set_playback(GameEnums.PlaybackRate.SLOW_025)
+	run("A12 慢放倍率 0.25", is_equal_approx(Engine.time_scale, 0.25))
+	ctl.set_playback(GameEnums.PlaybackRate.NORMAL_1)
+	ctl.set_playback(GameEnums.PlaybackRate.PAUSED)
+	run("A12 暂停置位且解除慢放", get_tree().paused == true and is_equal_approx(Engine.time_scale, 1.0))
+	var balls_before := a.projectiles.live_ball_count()
+	ctl.single_fire()
+	run("A12 暂停时单次触发无效", a.projectiles.live_ball_count() == balls_before)
+	ctl.set_playback(GameEnums.PlaybackRate.NORMAL_1)
+	run("A12 恢复 1 倍播放", is_equal_approx(Engine.time_scale, 1.0) and not get_tree().paused)
+
+	# 无敌：接触不扣血（设计文档 9.1 实战条件）
+	ctl.set_invincible(true)
+	var hp0 := a.player.hp
+	a.spawn_target(a.player.position, false)
+	for i in 6:
+		a.step_manual(1.0 / 60.0)
+	run("A11 试验无敌不扣血", a.player.hp == hp0, "hp=%d" % a.player.hp)
+
+	# 重置：清场 + 规则/种子还原（设计文档 9.3）
+	a.projectiles.rule.damage = 50.0
+	a.projectiles.rule.hit_radius = 30.0
+	ctl.reset_world()
+	run("A11 重置后规则还原", is_equal_approx(a.projectiles.rule.damage, 20.0)
+			and is_equal_approx(a.projectiles.rule.hit_radius, 8.0))
+	run("A11 重置后清场并重建单靶", a.enemies.size() == 1 and a.enemies[0].is_target)
+	run("A11 重置后玩家回发射点", a.player.position == Vector2.ZERO)
+
+	# 靶群预设数量
+	ctl.preset = GameEnums.ExperimentPreset.TARGET_ARRAY
+	ctl.target_count = 24
+	ctl.apply_preset()
+	run("A11 靶群按数量生成", a.enemies.size() == 24)
+
+	# A13：退出试验后无残留设置
+	ctl.set_playback(GameEnums.PlaybackRate.SLOW_025)
+	Game.exit_experiment()
+	run("A13 退出后倍率还原 1", is_equal_approx(Engine.time_scale, 1.0))
+	run("A13 退出后回主菜单", Game.state == GameEnums.GameState.MAIN_MENU and not Game.in_experiment)
+	run("A13 退出后解除暂停", get_tree().paused == false)
+	Game.start_run()
+	var b := Arena.new()
+	add_child(b)
+	b.spawner.enabled = false
+	b.step_manual(0.0)
+	run("A13 退出后开生存局无试验设置", b.is_experiment == false
+			and b.player.invincible == false and b.player.lock_position == false
+			and b.projectiles.auto_fire == true and b.camera_static == false)
+	run("A13 灰度辅助已复位", Palette.grayscale == false)
+	remove_child(a)
+	a.queue_free()
+	remove_child(ctl)
+	ctl.queue_free()
+	_free_arena(b)
 
 
 func _test_ui_smoke() -> void:

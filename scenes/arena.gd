@@ -23,6 +23,8 @@ var projectiles_node: Node2D
 var player_def: PlayerDef
 var enemy_def: EnemyDef
 var fireball_rule_base: AttackRule  # 未修改原型：重开/重置时从这里 duplicate
+var visual_a_base: VfxProfile      # 视觉基线：试验改参后从这里还原
+var visual_b_base: VfxProfile
 var visual_a: VfxProfile
 var visual_b: VfxProfile
 var camera_static := false     # 试验模式固定镜头
@@ -33,8 +35,10 @@ func _ready() -> void:
 	player_def = (load("res://balance/player_default.tres") as PlayerDef).duplicate()
 	enemy_def = (load("res://balance/enemy_default.tres") as EnemyDef).duplicate()
 	fireball_rule_base = load("res://balance/fireball_rule.tres")
-	visual_a = load("res://balance/vfx_fireball_a.tres")
-	visual_b = load("res://balance/vfx_fireball_b.tres")
+	visual_a_base = load("res://balance/vfx_fireball_a.tres")
+	visual_b_base = load("res://balance/vfx_fireball_b.tres")
+	visual_a = visual_a_base.duplicate()
+	visual_b = visual_b_base.duplicate()
 
 	ground = Ground.new()
 	ground.arena = self
@@ -166,6 +170,12 @@ func clear_world() -> void:
 	xp_manager.clear_gems()
 	for c in fx_layer.get_children():
 		c.queue_free()
+
+
+func restore_visuals() -> void:
+	## 视觉参数从基线还原（试验重置用，避免改参污染后续实验）
+	visual_a = visual_a_base.duplicate()
+	visual_b = visual_b_base.duplicate()
 
 
 func _contact_check() -> void:

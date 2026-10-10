@@ -10,6 +10,7 @@ var level_up_panel: LevelUpPanel
 var results_panel: ResultsPanel
 var sfx: Sfx
 var arena: Arena
+var experiment: ExperimentController
 
 
 func _ready() -> void:
@@ -23,7 +24,7 @@ func _ready() -> void:
 	main_menu = MainMenu.new()
 	ui_layer.add_child(main_menu)
 	main_menu.start_pressed.connect(Game.start_run)
-	main_menu.experiment_pressed.connect(_on_experiment)
+	main_menu.experiment_pressed.connect(Game.enter_experiment)
 	main_menu.quit_pressed.connect(get_tree().quit)
 
 	hud = Hud.new()
@@ -53,7 +54,7 @@ func _ready() -> void:
 
 
 func _on_experiment() -> void:
-	print("[main] 特效试验（Phase 3 接入试验场）")
+	pass  # 已直连 Game.enter_experiment
 
 
 func _on_run_started() -> void:
@@ -79,10 +80,33 @@ func _on_state_changed(_old: GameEnums.GameState, new_state: GameEnums.GameState
 	match new_state:
 		GameEnums.GameState.MAIN_MENU:
 			_clear_arena()
+			_clear_experiment()
+		GameEnums.GameState.EXPERIMENT:
+			_build_experiment()
 		GameEnums.GameState.LEVEL_UP:
 			_enter_level_up_flow()
 		GameEnums.GameState.SURVIVAL:
 			level_up_panel.visible = false
+
+
+## 试验模式：场地 + 控制器 + 面板（设计文档 9 章）
+func _build_experiment() -> void:
+	_clear_arena()
+	_clear_experiment()
+	arena = Arena.new()
+	add_child(arena)
+	experiment = ExperimentController.new()
+	add_child(experiment)
+	experiment.setup(arena)
+	experiment.build_panel(ui_layer)
+	experiment.exit_requested.connect(Game.exit_experiment)
+
+
+func _clear_experiment() -> void:
+	if experiment != null:
+		experiment.queue_free()
+		experiment = null
+	Palette.grayscale = false
 
 
 ## 连续升级：逐次显示升级选择，全部处理完才恢复战斗（设计文档 7.2）

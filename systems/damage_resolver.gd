@@ -21,9 +21,9 @@ static func apply_damage(target: Enemy, amount: float, attack_id: int,
 
 	var killed := false
 	if target.is_target:
-		# 试验固定靶：结算完本次伤害后恢复满生命，不进入死亡流程（设计文档 9.1）
-		if target.hp <= 0.0:
-			target.hp = target.def.max_hp
+		# 试验固定靶：每次伤害结算完成后恢复满生命，不进入死亡流程（设计文档 9.1：
+		# "命中后立即恢复靶生命"，回血不能使同一攻击再次命中——守卫 2 已保证）
+		target.hp = target.def.max_hp
 	elif target.hp <= 0.0:
 		killed = true
 		target.state = GameEnums.EnemyState.DYING
