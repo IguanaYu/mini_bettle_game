@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="SpawnPhaseDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://common/spawn_phase_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+time_from = 0.0
+time_to = 60.0
+spawn_interval = 1.3
+max_alive = 60
+chase_speed = 80.0

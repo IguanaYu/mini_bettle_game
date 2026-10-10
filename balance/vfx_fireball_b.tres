@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="VfxProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://common/vfx_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+muzzle_flash_time = 0.08
+muzzle_sparks = true
+body_radius = 10.0
+body_wobble = 2.0
+trail_lifetime = 0.22
+hit_flash_time = 0.26
+hit_max_radius = 28.0
+ember_lifetime = 0.35
+brightness = 1.0

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://common/enemy_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_hp = 30.0
+body_radius = 12.0
+contact_damage = 10
+xp_value = 5
+hit_flash_time = 0.08
+dissolve_time = 0.18

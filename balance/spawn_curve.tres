@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SpawnCurve" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://common/spawn_curve.gd" id="1"]
+[ext_resource type="Resource" path="res://balance/spawn_phase_0_60.tres" id="2"]
+[ext_resource type="Resource" path="res://balance/spawn_phase_60_180.tres" id="3"]
+[ext_resource type="Resource" path="res://balance/spawn_phase_180_300.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+phases = Array[Resource]([ExtResource("2"), ExtResource("3"), ExtResource("4")])
