@@ -18,6 +18,8 @@ var _f3_held := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	visible = false  # 初始隐藏，进入生存状态后由 main 显隐（否则全屏 HUD 挡住主菜单点击）
+	mouse_filter = Control.MOUSE_FILTER_IGNORE  # HUD 永不拦截鼠标
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# 左上：生命 + 等级/经验

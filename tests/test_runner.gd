@@ -44,6 +44,7 @@ func _ready() -> void:
 	_test_candidates_a14()
 	_test_experiment_a11_a12_a13()
 	_test_ui_smoke()
+	await _test_menu_click_regression()
 	finish()
 
 
@@ -497,3 +498,113 @@ func _test_balance() -> void:
 		if up != null:
 			ids[up.id] = true
 	run("强化 id 无重复", ids.size() == 5)
+
+
+# ---------- 主菜单点击回归（用户反馈：启动后菜单按钮点不了）----------
+
+func _test_menu_click_regression() -> void:
+	section("主菜单点击回归（用户反馈：启动后菜单点不了）")
+	var main_scene: Node = load("res://scenes/main.tscn").instantiate()
+	add_child(main_scene)
+	await get_tree().process_frame  # 等一帧让 Container 完成布局，否则矩形是脏的
+	var hud: Control = main_scene.hud
+	run("启动时 HUD 隐藏", hud.visible == false)
+	run("HUD 不拦截鼠标", hud.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+	var btn := _find_button(main_scene.main_menu, "开始生存")
+	run("找到开始生存按钮", btn != null)
+	if btn != null:
+		var point: Vector2 = btn.get_global_rect().get_center()
+		var blockers := _click_blockers(point, btn)
+		var names: Array[String] = []
+		for b in blockers:
+			names.append(str(b.name))
+		# headless 下 push_input 不走 GUI 拾取，改为直接断言"点击点上方无遮挡控件"
+		# + 按钮信号链有效。两者成立则真实点击必然生效。
+		run("按钮上方无遮挡控件", blockers.is_empty(), "、".join(names))
+		btn.pressed.emit()
+		run("按钮信号链有效：进入生存状态", Game.state == GameEnums.GameState.SURVIVAL,
+				"state=%d" % Game.state)
+		run("点击后场地已建立", main_scene.arena != null)
+	remove_child(main_scene)
+	main_scene.queue_free()
+	Game.return_to_menu()
+
+
+func _find_button(node: Node, text: String) -> Button:
+	if node is Button and (node as Button).text == text:
+		return node
+	for c in node.get_children():
+		var found := _find_button(c, text)
+		if found != null:
+			return found
+	return null
+
+
+## 返回在拾取顺序上位于 target 之上、覆盖 point、且会拦截鼠标的可见控件列表。
+## 模拟 Viewport 的 GUI 拾取规则：CanvasLayer 越大越上；同层内分叉处 child
+## 序号越大越上；一个是另一个祖先时更深者在上面。
+func _click_blockers(point: Vector2, target: Control) -> Array[Control]:
+	var blockers: Array[Control] = []
+	var candidates: Array = []
+	_collect_controls(get_tree().root, candidates)
+	for c in candidates:
+		var ctrl: Control = c
+		if ctrl == target or _is_ancestor_of(ctrl, target):
+			continue  # 按钮自身与其父容器不算遮挡
+		if not ctrl.is_visible_in_tree():
+			continue
+		if ctrl.mouse_filter != Control.MOUSE_FILTER_STOP:
+			continue  # IGNORE/PASS 不会吃掉点击
+		if not ctrl.get_global_rect().has_point(point):
+			continue
+		if _is_picked_above(ctrl, target):
+			blockers.append(ctrl)
+	return blockers
+
+
+func _collect_controls(node: Node, out: Array) -> void:
+	if node is Control:
+		out.append(node)
+	for c in node.get_children():
+		_collect_controls(c, out)
+
+
+func _is_ancestor_of(node: Node, of: Node) -> bool:
+	var p := of.get_parent()
+	while p != null:
+		if p == node:
+			return true
+		p = p.get_parent()
+	return false
+
+
+func _canvas_layer_of(node: Node) -> int:
+	var n := node
+	while n != null:
+		if n is CanvasLayer:
+			return n.layer
+		n = n.get_parent()
+	return 0
+
+
+func _ancestor_chain(node: Node) -> Array:
+	var chain: Array = []
+	var n: Node = node
+	while n != null:
+		chain.push_front(n)
+		n = n.get_parent()
+	return chain
+
+
+func _is_picked_above(a: Control, b: Control) -> bool:
+	var la := _canvas_layer_of(a)
+	var lb := _canvas_layer_of(b)
+	if la != lb:
+		return la > lb
+	var chain_a := _ancestor_chain(a)
+	var chain_b := _ancestor_chain(b)
+	for i in mini(chain_a.size(), chain_b.size()):
+		if chain_a[i] != chain_b[i]:
+			return chain_a[i].get_index() > chain_b[i].get_index()
+	# 未分叉：链短者是长者的祖先，更深者在上面
+	return chain_a.size() > chain_b.size()

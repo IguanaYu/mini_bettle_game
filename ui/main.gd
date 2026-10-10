@@ -51,6 +51,8 @@ func _ready() -> void:
 	Game.run_started.connect(_on_run_started)
 	Game.state_changed.connect(_on_state_changed)
 	EventBus.run_finished.connect(_on_run_finished)
+	# 启动时同步一次各界面显隐（状态机初始即 MAIN_MENU，不会主动触发 state_changed）
+	_on_state_changed(GameEnums.GameState.MAIN_MENU, GameEnums.GameState.MAIN_MENU)
 
 
 func _on_experiment() -> void:
@@ -71,6 +73,7 @@ func _on_run_finished(_win: bool, _reason: String) -> void:
 
 
 func _on_state_changed(_old: GameEnums.GameState, new_state: GameEnums.GameState) -> void:
+	print("[main] state -> ", GameEnums.GameState.keys()[new_state])
 	main_menu.visible = new_state == GameEnums.GameState.MAIN_MENU
 	hud.visible = new_state in [GameEnums.GameState.SURVIVAL, GameEnums.GameState.PAUSED,
 			GameEnums.GameState.LEVEL_UP, GameEnums.GameState.RESULTS]
