@@ -20,6 +20,11 @@ func randi_range(from: int, to: int) -> int:
 	return game_rng.randi_range(from, to)
 
 func shuffled(arr: Array) -> Array:
+	## Fisher-Yates 洗牌（RandomNumberGenerator 没有 shuffle 方法，手写以保持种子可控）
 	var copy := arr.duplicate()
-	game_rng.shuffle(copy)
+	for i in range(copy.size() - 1, 0, -1):
+		var j := game_rng.randi_range(0, i)
+		var tmp = copy[i]
+		copy[i] = copy[j]
+		copy[j] = tmp
 	return copy

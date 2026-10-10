@@ -125,7 +125,7 @@ class TrailGhost:
 	var points: Array[Vector2] = []
 
 	func setup(pts: Array, profile: VfxProfile) -> void:
-		points = pts
+		points.assign(pts)
 		life = maxf(profile.trail_lifetime, 0.01)
 
 	func tick(delta: float) -> void:

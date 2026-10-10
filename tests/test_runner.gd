@@ -38,6 +38,11 @@ func _ready() -> void:
 	_test_fireball_a02_a03()
 	_test_contact_a04()
 	_test_spawner_a15()
+	_test_xp_a05_a06()
+	_test_pause_a07_a08()
+	_test_restart_a10()
+	_test_candidates_a14()
+	_test_ui_smoke()
 	finish()
 
 
@@ -143,6 +148,157 @@ func _test_contact_a04() -> void:
 		a.step_manual(1.0 / 60.0)
 	run("A09 结算后倒计时停止", is_equal_approx(Game.run.elapsed, elapsed_at_finish))
 	_free_arena(a)
+
+
+func _test_xp_a05_a06() -> void:
+	section("A05 经验拾取 / A06 连续升级")
+	var a := _new_arena()
+	a.xp_manager.spawn_gem(a.player.position, 5)
+	a.step_manual(1.0 / 60.0)
+	run("A05 拾取只入账一次", Game.run.xp == 5 and a.xp_manager.gems.is_empty(),
+		"xp=%d gems=%d" % [Game.run.xp, a.xp_manager.gems.size()])
+	a.xp_manager.spawn_gem(a.player.position + Vector2(40, 0), 5)
+	a.xp_manager.spawn_gem(a.player.position + Vector2(200, 0), 5)
+	for i in 30:
+		a.step_manual(1.0 / 60.0)
+	run("A05 近处被吸取远处静止", Game.run.xp == 10 and a.xp_manager.gems.size() == 1,
+		"xp=%d gems=%d" % [Game.run.xp, a.xp_manager.gems.size()])
+	var far_gem: ExpGem = a.xp_manager.gems[0]
+	run("A05 未吸引的保持原位", absf(far_gem.position.x - 200.0) < 1.0, str(far_gem.position))
+	# 合并：邻近经验物合并，总价值守恒（设计文档 7.1）
+	a.xp_manager.spawn_gem(Vector2(100, 100), 5)
+	a.xp_manager.spawn_gem(Vector2(108, 100), 7)
+	a.xp_manager._merge_scan()
+	var merged := false
+	for g in a.xp_manager.gems:
+		if g.value == 12:
+			merged = true
+	run("A05b 邻近经验物合并守恒", merged and a.xp_manager.gems.size() == 2)
+	_free_arena(a)
+
+	# A06：一次拾取跨过两个阈值 → 逐次选择、剩余经验保留
+	var a2 := _new_arena()
+	Game.run.xp = 46
+	a2.xp_manager.collect_xp(9)  # 55 → 升2(剩35) → 升3(剩5)
+	run("A06 连跨两级 pending=2", Game.run.pending_level_ups == 2 and Game.run.level == 3 and Game.run.xp == 5,
+		"lv=%d xp=%d pending=%d" % [Game.run.level, Game.run.xp, Game.run.pending_level_ups])
+	run("A06 进入升级选择状态", Game.state == GameEnums.GameState.LEVEL_UP)
+	var opts := a2.upgrades.candidates()
+	a2.upgrades.apply(opts[0])
+	Game.run.pending_level_ups -= 1
+	run("A06 一次选择后仍待选", Game.run.pending_level_ups == 1)
+	run("A06 强化层数已记录", int(Game.run.upgrade_stacks.get(opts[0].id, 0)) == 1)
+	a2.upgrades.apply(a2.upgrades.candidates()[0])
+	Game.run.pending_level_ups -= 1
+	Game.set_state(GameEnums.GameState.SURVIVAL)
+	run("A06 全部处理完恢复战斗", Game.state == GameEnums.GameState.SURVIVAL and Game.run.pending_level_ups == 0)
+	_free_arena(a2)
+
+
+func _test_pause_a07_a08() -> void:
+	section("A07/A08 暂停语义")
+	var a := _new_arena(false)
+	for i in 120:
+		a.step_manual(1.0 / 60.0)
+	var elapsed0 := Game.run.elapsed
+	var alive0 := a.live_enemy_count()
+	Game.set_state(GameEnums.GameState.PAUSED)
+	run("A07 暂停时 tree 置暂停", get_tree().paused == true)
+	for i in 30:
+		a.step_manual(1.0 / 60.0)
+	run("A07 暂停期间世界与倒计时停止",
+			is_equal_approx(Game.run.elapsed, elapsed0) and a.live_enemy_count() == alive0,
+			"elapsed=%.2f alive=%d" % [Game.run.elapsed, a.live_enemy_count()])
+	Game.set_state(GameEnums.GameState.SURVIVAL)
+	run("A08 恢复解除暂停", get_tree().paused == false)
+	for i in 120:
+		a.step_manual(1.0 / 60.0)
+	run("A08 恢复后正常推进且无补刷爆发", Game.run.elapsed > elapsed0 + 1.0 and a.live_enemy_count() <= 60,
+			"alive=%d" % a.live_enemy_count())
+	_free_arena(a)
+
+
+func _test_restart_a10() -> void:
+	section("A10 重开无残留")
+	var a := _new_arena(false)
+	for i in 300:
+		a.step_manual(1.0 / 60.0)
+	a.xp_manager.spawn_gem(Vector2(30, 0), 5)
+	a.projectiles.fire_forward()
+	run("A10 本局确实产生了对象",
+			a.live_enemy_count() > 0 and a.xp_manager.gems.size() > 0)
+	var b: Arena
+	Game.start_run()  # 模拟 main：新上下文 + 新场地
+	b = Arena.new()
+	add_child(b)
+	b.spawner.enabled = false
+	b.step_manual(0.0)
+	run("A10 上下文重建归零", Game.run.kills == 0 and is_equal_approx(Game.run.elapsed, 0.0)
+			and Game.run.level == 1 and Game.run.xp == 0 and Game.run.pending_level_ups == 0
+			and Game.run.upgrade_stacks.is_empty())
+	run("A10 新场地无残留", b.enemies.is_empty() and b.projectiles.balls.is_empty()
+			and b.xp_manager.gems.is_empty() and b.player.hp == 100)
+	run("A10 火球间隔还原", is_equal_approx(b.projectiles.rule.fire_interval, 1.0),
+			"%.2f" % b.projectiles.rule.fire_interval)
+	run("A10 时间倍率还原", is_equal_approx(Engine.time_scale, 1.0))
+	_free_arena(a)
+	_free_arena(b)
+
+
+func _test_candidates_a14() -> void:
+	section("A14 强化候选抽取与满级处理")
+	var a := _new_arena()
+	for up in a.upgrades.db:
+		Game.run.upgrade_stacks[up.id] = up.max_stacks
+	run("A14 全满级无候选", a.upgrades.candidates().is_empty())
+	Game.start_run()
+	var opts := a.upgrades.candidates()
+	var ids := {}
+	for up in opts:
+		ids[up.id] = true
+	run("A14 候选至多 3 个", opts.size() == 3, str(opts.size()))
+	run("A14 候选不重复", ids.size() == opts.size())
+	var db: Array = a.upgrades.db
+	for i in 3:
+		Game.run.upgrade_stacks[db[i].id] = db[i].max_stacks
+	run("A14 不足三个显示实际数量", a.upgrades.candidates().size() == 2)
+	# 满级升级直接恢复 25 生命（上限截断，满血为 0）——设计文档 7.3
+	for up in a.upgrades.db:
+		Game.run.upgrade_stacks[up.id] = up.max_stacks
+	a.player.hp = 80
+	Game.run.pending_level_ups = 1
+	while Game.run.pending_level_ups > 0 and a.upgrades.candidates().is_empty():
+		a.player.hp = mini(a.player.hp + 25, a.player.max_hp)
+		Game.run.pending_level_ups -= 1
+	run("A14 满级升级恢复25生命(截断上限)", a.player.hp == 100, "hp=%d" % a.player.hp)
+	_free_arena(a)
+
+
+func _test_ui_smoke() -> void:
+	section("UI 冒烟（构建与关键刷新不报错）")
+	var hud := Hud.new()
+	add_child(hud)
+	var pause := PauseMenu.new()
+	add_child(pause)
+	var levelup := LevelUpPanel.new()
+	add_child(levelup)
+	var results := ResultsPanel.new()
+	add_child(results)
+	var menu := MainMenu.new()
+	add_child(menu)
+	# 结果面板用假数据渲染一次
+	var fake := RunContext.new()
+	fake.result_win = true
+	fake.result_reason = "生存满300秒"
+	fake.kills = 42
+	results.show_result(fake, ["火球伤害 ×2", "移动速度 ×1"])
+	# 升级面板用假强化渲染一次
+	var up := load("res://balance/upgrades/fire_damage.tres") as UpgradeDef
+	levelup.show_choices([up], ["火球伤害 20 → 25"])
+	run("UI 面板全部构建成功", hud != null and pause != null and levelup != null and results != null and menu != null)
+	for node in [hud, pause, levelup, results, menu]:
+		remove_child(node)
+		node.queue_free()
 
 
 func _test_spawner_a15() -> void:

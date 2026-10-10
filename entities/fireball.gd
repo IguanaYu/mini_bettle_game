@@ -26,7 +26,9 @@ func record_trail() -> void:
 
 
 func trail_snapshot() -> Array[Vector2]:
-	return trail_pos.duplicate()
+	var out: Array[Vector2] = []
+	out.assign(trail_pos)
+	return out
 
 
 func _draw() -> void:

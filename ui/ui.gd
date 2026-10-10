@@ -29,6 +29,12 @@ static func full_rect(c: Control) -> Control:
 	return c
 
 
+static func spacer(h: float) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(0, h)
+	return c
+
+
 static func center_panel() -> PanelContainer:
 	## 居中面板：全屏暗化背景 + CenterContainer + PanelContainer
 	var dim := ColorRect.new()

@@ -14,6 +14,8 @@ var fx_layer: FxLayer
 var debug_draw: DebugDraw
 var spawner: Spawner
 var projectiles: ProjectileManager
+var xp_manager: XpManager
+var upgrades: UpgradeSystem
 
 var enemies: Array[Enemy] = []
 var projectiles_node: Node2D
@@ -65,6 +67,14 @@ func _ready() -> void:
 	add_child(spawner)
 	spawner.setup(self)
 
+	xp_manager = XpManager.new()
+	add_child(xp_manager)
+	xp_manager.setup(self)
+
+	upgrades = UpgradeSystem.new()
+	add_child(upgrades)
+	upgrades.setup(self)
+
 
 func _process(delta: float) -> void:
 	_step(delta)
@@ -95,6 +105,7 @@ func _step(delta: float) -> void:
 	player.tick(delta)
 	spawner.tick(delta, _elapsed())
 	projectiles.tick(delta)
+	xp_manager.tick(delta)
 	_contact_check()
 	for e in enemies:
 		e.tick(delta)
@@ -140,17 +151,19 @@ func spawn_target(pos: Vector2, as_target := true) -> Enemy:
 
 
 func on_enemy_killed(e: Enemy) -> void:
-	## 由 DamageResolver 调用；经验掉落在 Phase 2 接入 xp_manager
+	## 由 DamageResolver 调用：击杀统计 + 经验掉落（设计文档 7.1）
 	if Game.run != null and not is_experiment:
 		Game.run.kills += 1
+		xp_manager.spawn_gem(e.position, e.def.xp_value)
 
 
 func clear_world() -> void:
-	## 清场：敌人、弹体、特效（重开/重置共用，设计文档 5.6）
+	## 清场：敌人、弹体、特效、经验（重开/重置共用，设计文档 5.6 清理清单）
 	for e in enemies:
 		e.queue_free()
 	enemies.clear()
 	projectiles.clear_balls()
+	xp_manager.clear_gems()
 	for c in fx_layer.get_children():
 		c.queue_free()
 
