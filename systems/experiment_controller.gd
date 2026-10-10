@@ -81,13 +81,14 @@ func reset_world() -> void:
 
 
 func _build_preset() -> void:
+	## 靶子位置避开右侧面板（约 320px 宽）：世界坐标 |x| ≤ 300 时不会被面板遮挡
 	match preset:
 		GameEnums.ExperimentPreset.SINGLE_TARGET:
-			arena.spawn_target(Vector2(420, 0), true)
+			arena.spawn_target(Vector2(280, 0), true)
 		GameEnums.ExperimentPreset.TARGET_ARRAY:
 			for i in target_count:
 				var ang := TAU * float(i) / float(target_count)
-				arena.spawn_target(Vector2(380, 0).rotated(ang), true)
+				arena.spawn_target(Vector2(300, 0).rotated(ang), true)
 		GameEnums.ExperimentPreset.LIVE_CHASE:
 			pass  # spawner 已开启
 
