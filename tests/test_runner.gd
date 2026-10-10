@@ -45,6 +45,7 @@ func _ready() -> void:
 	_test_experiment_a11_a12_a13()
 	_test_ui_smoke()
 	await _test_menu_click_regression()
+	await _test_experiment_panel_regression()
 	finish()
 
 
@@ -608,3 +609,31 @@ func _is_picked_above(a: Control, b: Control) -> bool:
 			return chain_a[i].get_index() > chain_b[i].get_index()
 	# 未分叉：链短者是长者的祖先，更深者在上面
 	return chain_a.size() > chain_b.size()
+
+
+# ---------- 试验面板遮挡回归（全功能走查实测发现的两个 bug）----------
+
+func _test_experiment_panel_regression() -> void:
+	section("试验面板遮挡回归")
+	var main_scene: Node = load("res://scenes/main.tscn").instantiate()
+	add_child(main_scene)
+	await get_tree().process_frame
+	Game.enter_experiment()
+	await get_tree().process_frame
+	var panel: ExperimentPanel = main_scene.experiment.panel
+	# bug1：Esc 菜单未打开时，其全屏暗化遮罩不得挡住试验面板的按钮
+	run("Esc 菜单默认整体隐藏", panel.exit_root.visible == false)
+	var blockers := _click_blockers(panel.btn_slow.get_global_rect().get_center(), panel.btn_slow)
+	var names: Array[String] = []
+	for b in blockers:
+		names.append(str(b.name))
+	run("慢放按钮上方无遮挡", blockers.is_empty(), "、".join(names))
+	# bug2：退出试验后，面板（挂 ui_layer 下）必须随控制器一并销毁
+	var panel_ref: WeakRef = weakref(panel)
+	Game.exit_experiment()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	run("退出试验后面板已销毁", panel_ref.get_ref() == null)
+	remove_child(main_scene)
+	main_scene.queue_free()
+	Game.return_to_menu()

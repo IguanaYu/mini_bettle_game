@@ -107,6 +107,10 @@ func _build_experiment() -> void:
 
 func _clear_experiment() -> void:
 	if experiment != null:
+		# 面板挂在 ui_layer 下（不在 controller 子树里），必须一并销毁，
+		# 否则残留的全屏面板会挡住主菜单点击（走查实测发现）
+		if experiment.panel != null:
+			experiment.panel.queue_free()
 		experiment.queue_free()
 		experiment = null
 	Palette.grayscale = false

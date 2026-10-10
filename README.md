@@ -16,11 +16,14 @@
 
 ```bash
 GODOT="E:/godot/tools/godot461/Godot_v4.6.1-stable_win64_console.exe"
-"$GODOT" --headless --path . res://tests/test_runner.tscn     # 113 项断言，退出码 0 = 全过
-"$GODOT" --path . res://tests/screenshot_runner.tscn          # 真实渲染截两张验收图（会弹窗几秒）
+"$GODOT" --headless --path . res://tests/test_runner.tscn            # 122 项断言，退出码 0 = 全过
+"$GODOT" --path . res://tests/full_walkthrough_runner.tscn           # 全功能走查（窗口约 3 分钟自动玩一遍，65 项 + 截图）
+"$GODOT" --path . res://tests/screenshot_runner.tscn                 # 快速截两张验收图（会弹窗几秒）
 ```
 
-测试覆盖设计文档全部 16 条验收用例中可自动验证的部分（A01~A15；A16 的"可辨认性"属人工观察，见 `docs/experiments/FX001.md`）。
+- `test_runner`（headless）：设计文档 A01~A15 全部可自动化用例 + UI 结构与遮挡回归。
+- `full_walkthrough_runner`（窗口、真实输入管线）：从主菜单点击开始，完整走一遍生存（移动/战斗/捡经验/升级选卡/暂停/F3/死亡结算/重开/返回）与试验模式（三预设/触发/慢放/暂停拦截/AB 视觉/参数标红/无敌锁定/深色灰度碰撞/重置/Esc 菜单/退出无残留），每步截图存 `docs/screenshots/walkthrough/`。
+- A16 的"灰度下可辨认性"属人工观察，见 `docs/experiments/FX001.md`。
 
 ## 结构速览
 

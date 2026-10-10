@@ -10,7 +10,7 @@ var content: VBoxContainer
 var mini_bar: HBoxContainer
 var mini_label: Label
 
-var preset_option: OptionButton
+var preset_buttons: Array[Button] = []
 var count_spin: SpinBox
 var cap_spin: SpinBox
 var count_row: HBoxContainer
@@ -31,6 +31,7 @@ var collision_check: CheckButton
 var counter_label: Label
 var time_label: Label
 var hint_label: Label
+var exit_root: Control        # Esc 菜单总容器（含暗化遮罩），隐藏必须藏这一层
 var exit_menu: PanelContainer
 
 var rule_spins: Array = []   # [SpinBox, Callable(取值)]
@@ -90,16 +91,20 @@ func _build() -> void:
 	content.add_theme_constant_override("separation", 8)
 	scroll.add_child(content)
 
-	# --- 预设 ---
+	# --- 预设（三个直选按钮，替代下拉框：一次点击直达，也便于自动化验证）---
 	content.add_child(_section_label("场景预设"))
-	preset_option = OptionButton.new()
-	preset_option.add_item("单靶观察", GameEnums.ExperimentPreset.SINGLE_TARGET)
-	preset_option.add_item("固定靶群", GameEnums.ExperimentPreset.TARGET_ARRAY)
-	preset_option.add_item("实战追击", GameEnums.ExperimentPreset.LIVE_CHASE)
-	preset_option.item_selected.connect(func(i: int) -> void:
-		ctl.preset = i as GameEnums.ExperimentPreset
-		ctl.apply_preset())
-	content.add_child(preset_option)
+	var preset_row := HBoxContainer.new()
+	preset_row.add_theme_constant_override("separation", 6)
+	content.add_child(preset_row)
+	var preset_names := ["单靶", "靶群", "实战"]
+	for i in 3:
+		var pb := Ui.button(preset_names[i], 92, 32)
+		var idx := i
+		pb.pressed.connect(func() -> void:
+			ctl.preset = idx as GameEnums.ExperimentPreset
+			ctl.apply_preset())
+		preset_row.add_child(pb)
+		preset_buttons.append(pb)
 	count_row = _row(content, "靶群数量")
 	count_spin = _spin(count_row, 10, 50, 1, func() -> float: return float(ctl.target_count),
 			func(v: float) -> void: ctl.target_count = int(v))
@@ -218,8 +223,13 @@ func _build() -> void:
 	content.add_child(hint_label)
 
 	# --- Esc 退出与重置菜单（设计文档 8.2）---
-	exit_menu = Ui.center_panel(self)
-	exit_menu.visible = false
+	# 注意：center_panel 的暗化遮罩是全屏 STOP，必须整体挂在一个可隐藏的根下，
+	# 否则遮罩常驻会挡住整个试验面板的鼠标（并让画面一直变暗）。
+	exit_root = Control.new()
+	exit_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(exit_root)
+	exit_menu = Ui.center_panel(exit_root)
+	exit_root.visible = false
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	exit_menu.add_child(box)
@@ -301,7 +311,8 @@ func _add_visual_spin(parent: Node, label: String, minv: float, maxv: float, ste
 # ---------- 状态同步 ----------
 
 func sync_from_controller() -> void:
-	preset_option.selected = ctl.preset
+	for i in preset_buttons.size():
+		preset_buttons[i].modulate = Color(1, 1, 0.5) if i == ctl.preset else Color(1, 1, 1)
 	count_row.visible = ctl.preset == GameEnums.ExperimentPreset.TARGET_ARRAY
 	cap_row.visible = ctl.preset == GameEnums.ExperimentPreset.LIVE_CHASE
 	count_spin.set_value_no_signal(ctl.target_count)
@@ -376,4 +387,4 @@ func _unhandled_input(event: InputEvent) -> void:
 	if Game.state != GameEnums.GameState.EXPERIMENT or Game.ui_has_focus():
 		return
 	if event.is_action_pressed("pause"):
-		exit_menu.visible = not exit_menu.visible
+		exit_root.visible = not exit_root.visible
