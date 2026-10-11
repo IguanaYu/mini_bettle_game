@@ -24,6 +24,8 @@ var fx_layer: FxLayer
 var debug_draw: DebugDraw
 var spawner: Spawner
 var projectiles: ProjectileManager
+var scatter: ScatterManager          # W01 散射火球（升级解锁后激活）
+var fire_eggs: FireEggManager        # W07 火蛋（升级解锁后激活）
 var xp_manager: XpManager
 var upgrades: UpgradeSystem
 
@@ -33,6 +35,9 @@ var projectiles_node: Node2D
 var player_def: PlayerDef
 var enemy_def: EnemyDef
 var fireball_rule_base: AttackRule  # 未修改原型：重开/重置时从这里 duplicate
+var scatter_rule_base: ScatterRule
+var fire_egg_rule_base: FireEggRule
+var next_attack_id := 0             # 全场地共享：不同武器的 attack_id 不得撞车（去重依赖它）
 var visual_a_base: VfxProfile      # 视觉基线：试验改参后从这里还原
 var visual_b_base: VfxProfile
 var visual_a: VfxProfile
@@ -45,6 +50,8 @@ func _ready() -> void:
 	player_def = (load("res://balance/player_default.tres") as PlayerDef).duplicate()
 	enemy_def = (load("res://balance/enemy_default.tres") as EnemyDef).duplicate()
 	fireball_rule_base = load("res://balance/fireball_rule.tres")
+	scatter_rule_base = load("res://balance/scatter_rule.tres")
+	fire_egg_rule_base = load("res://balance/fire_egg_rule.tres")
 	visual_a_base = load("res://balance/vfx_fireball_a.tres")
 	visual_b_base = load("res://balance/vfx_fireball_b.tres")
 	visual_a = visual_a_base.duplicate()
@@ -76,6 +83,14 @@ func _ready() -> void:
 	projectiles = ProjectileManager.new()
 	add_child(projectiles)
 	projectiles.setup(self, fireball_rule_base.duplicate(), visual_a)
+
+	scatter = ScatterManager.new()
+	add_child(scatter)
+	scatter.setup(self, scatter_rule_base.duplicate())
+
+	fire_eggs = FireEggManager.new()
+	add_child(fire_eggs)
+	fire_eggs.setup(self, fire_egg_rule_base.duplicate())
 
 	spawner = Spawner.new()
 	add_child(spawner)
@@ -120,6 +135,8 @@ func _step(delta: float) -> void:
 	_clamp_to_arena(player, player.radius)
 	spawner.tick(delta, _elapsed())
 	projectiles.tick(delta)
+	scatter.tick(delta)
+	fire_eggs.tick(delta)
 	xp_manager.tick(delta)
 	_contact_check()
 	for e in enemies:
@@ -178,12 +195,19 @@ func on_enemy_killed(e: Enemy) -> void:
 		xp_manager.spawn_gem(e.position, e.def.xp_value)
 
 
+func alloc_attack_id() -> int:
+	## 全场地唯一 attack_id：不同武器共用计数，防止"同攻击去重"误伤（开发方案 5.4）
+	next_attack_id += 1
+	return next_attack_id
+
+
 func clear_world() -> void:
 	## 清场：敌人、弹体、特效、经验（重开/重置共用，设计文档 5.6 清理清单）
 	for e in enemies:
 		e.queue_free()
 	enemies.clear()
 	projectiles.clear_balls()
+	fire_eggs.clear()
 	xp_manager.clear_gems()
 	for c in fx_layer.get_children():
 		c.queue_free()

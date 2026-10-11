@@ -2,7 +2,8 @@ class_name UpgradeDef
 extends Resource
 ## 声明式强化条目（设计文档 7.3）：数值全部在 balance/upgrades/ 的 .tres 中。
 
-enum StatKind { FIRE_DAMAGE, FIRE_INTERVAL, MOVE_SPEED, PICKUP_RADIUS, MAX_HP }
+enum StatKind { FIRE_DAMAGE, FIRE_INTERVAL, MOVE_SPEED, PICKUP_RADIUS, MAX_HP,
+		UNLOCK_SCATTER, SCATTER_COUNT, UNLOCK_FIRE_EGG }  # 后三项：武器解锁/强化（火系武器扩展设计）
 enum Op { FLAT_ADD, MULTIPLY }
 
 @export var id: StringName = &""

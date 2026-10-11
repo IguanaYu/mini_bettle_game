@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="UpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://common/upgrade_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"scatter_count"
+display_name = "散射火球数量"
+stat = 6
+op = 0
+flat_amount = 1.0
+factor = 0.9
+max_stacks = 2
+clamp_min = -1.0
+heal_on_stack = 0

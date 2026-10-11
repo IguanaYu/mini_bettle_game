@@ -42,6 +42,7 @@ func _ready() -> void:
 	_test_pause_a07_a08()
 	_test_restart_a10()
 	_test_candidates_a14()
+	_test_weapons_w01_w07()
 	_test_experiment_a11_a12_a13()
 	_test_ui_smoke()
 	await _test_menu_click_regression()
@@ -268,7 +269,8 @@ func _test_candidates_a14() -> void:
 	run("A14 候选至多 3 个", opts.size() == 3, str(opts.size()))
 	run("A14 候选不重复", ids.size() == opts.size())
 	var db: Array = a.upgrades.db
-	for i in 3:
+	# db 现含武器条目共 8 条（两把武器解锁 + 数量强化）：锁前 6 条，余 2 个可选
+	for i in 6:
 		Game.run.upgrade_stacks[db[i].id] = db[i].max_stacks
 	run("A14 不足三个显示实际数量", a.upgrades.candidates().size() == 2)
 	# 满级升级直接恢复 25 生命（上限截断，满血为 0）——设计文档 7.3
@@ -281,6 +283,142 @@ func _test_candidates_a14() -> void:
 		Game.run.pending_level_ups -= 1
 	run("A14 满级升级恢复25生命(截断上限)", a.player.hp == 100, "hp=%d" % a.player.hp)
 	_free_arena(a)
+
+
+func _test_weapons_w01_w07() -> void:
+	section("W01 散射火球 / W07 火蛋（火系武器扩展设计）")
+	var hits: Array = []
+	var fired: Array = []
+	var on_hit := func(_id: int, _tid: int, _pos: Vector2, _el: int, killed: bool) -> void:
+		hits.append(killed)
+	var on_fired := func(_e: int, _i: int, _p: Vector2, _d: Vector2) -> void:
+		fired.append(true)
+	EventBus.attack_hit.connect(on_hit)
+	EventBus.attack_fired.connect(on_fired)
+
+	# ---- W01：扇形齐射与击杀节奏 ----
+	var a := _new_arena()
+	a.spawner.enabled = false
+	a.projectiles.auto_fire = false  # 隔离火球武器，只观察散射
+	a.spawn_target(Vector2(300, 0), false)
+	a.scatter.activate(a.scatter_rule_base.duplicate())
+	a.step_manual(1.0 / 60.0)
+	run("W01 一次开火齐射 3 发", a.projectiles.balls.size() == 3, str(a.projectiles.balls.size()))
+	var angles: Array[float] = []
+	for b in a.projectiles.balls:
+		angles.append(b.dir.angle())
+	angles.sort()
+	run("W01 中间弹正对目标", absf(angles[1]) < 0.001, str(angles))
+	run("W01 两侧弹 ±12°", absf(angles[0] + deg_to_rad(12.0)) < 0.001
+			and absf(angles[2] - deg_to_rad(12.0)) < 0.001, str(angles))
+	run("W01 齐射只发一次开火事件", fired.size() == 1, str(fired.size()))
+	for i in 240:  # 4 秒：覆盖三轮齐射（间隔 1.4s）与第三轮命中
+		a.step_manual(1.0 / 60.0)
+	run("W01 三轮只中 3 发（侧弹不碰目标）", hits.size() == 3, str(hits.size()))
+	run("W01 单发 12 两发不杀", hits.size() == 3 and hits[0] == false and hits[1] == false)
+	run("W01 第三轮击杀", hits.size() == 3 and hits[2] == true)
+	_free_arena(a)
+	hits.clear()
+	fired.clear()
+
+	# ---- W01：升级路径（解锁卡 → 数量卡） ----
+	var b := _new_arena()
+	b.spawner.enabled = false
+	var unlock_def: UpgradeDef = load("res://balance/upgrades/unlock_scatter.tres")
+	var count_def: UpgradeDef = load("res://balance/upgrades/scatter_count.tres")
+	run("W01 未解锁时数量卡不可选", not b.upgrades._available().has(count_def))
+	b.upgrades.apply(unlock_def)
+	run("W01 解锁即激活散射", b.scatter.active)
+	run("W01 解锁后数量卡可选", b.upgrades._available().has(count_def))
+	var summary := b.upgrades.apply(count_def)
+	run("W01 数量强化 3 → 4", b.scatter.rule.pellet_count == 4, str(b.scatter.rule.pellet_count))
+	run("W01 卡片文案显示实际变化", summary.contains("3 → 4"), summary)
+	b.projectiles.auto_fire = false
+	b.spawn_target(Vector2(300, 0), false)
+	b.step_manual(1.0 / 60.0)
+	run("W01 强化后齐射 4 发", b.projectiles.balls.size() == 4, str(b.projectiles.balls.size()))
+	var egg_def: UpgradeDef = load("res://balance/upgrades/unlock_fire_egg.tres")
+	b.upgrades.apply(egg_def)
+	run("W07 升级解锁即激活火蛋", b.fire_eggs.active)
+	_free_arena(b)
+
+	# ---- W07：命中生成火池，六跳总伤 30 击杀 ----
+	var c := _new_arena()
+	c.spawner.enabled = false
+	c.projectiles.auto_fire = false
+	c.fire_eggs.activate(c.fire_egg_rule_base.duplicate())
+	c.fire_eggs.auto_fire = false  # 手动投掷，隔离自动节奏
+	c.spawn_target(Vector2(150, 0), false)
+	c.fire_eggs.fire_dir(Vector2.RIGHT)
+	for i in 30:  # 0.5s：慢速在途
+		c.step_manual(1.0 / 60.0)
+	run("W07 慢速在途未生成火池", c.fire_eggs.eggs.size() == 1 and c.fire_eggs.pools.is_empty())
+	for i in 60:  # 累计 1.5s > 命中时刻约 0.8s
+		c.step_manual(1.0 / 60.0)
+	run("W07 命中生成火池", c.fire_eggs.pools.size() == 1, str(c.fire_eggs.pools.size()))
+	if c.fire_eggs.pools.size() == 1:
+		run("W07 火池中心在命中点附近",
+				c.fire_eggs.pools[0].position.distance_to(Vector2(128, 0)) < 8.0,
+				str(c.fire_eggs.pools[0].position))
+	for i in 150:  # 覆盖火池整个寿命（3s）与第六跳
+		c.step_manual(1.0 / 60.0)
+	run("W07 六跳总伤 30 击杀", hits.size() == 6 and hits[5] == true, str(hits))
+	run("W07 击杀统计为 1", Game.run.kills == 1, str(Game.run.kills))
+	run("W07 玩家未受火池伤害", c.player.hp == 100, str(c.player.hp))
+	run("W07 火池到期消散", c.fire_eggs.pools.is_empty(), str(c.fire_eggs.pools.size()))
+	_free_arena(c)
+	hits.clear()
+
+	# ---- W07：到期原地烧尽 / 撞墙钳制 / 同屏上限 ----
+	var d := _new_arena()
+	d.spawner.enabled = false
+	d.projectiles.auto_fire = false
+	d.fire_eggs.activate(d.fire_egg_rule_base.duplicate())
+	d.fire_eggs.auto_fire = false
+	d.fire_eggs.fire_dir(Vector2.LEFT)  # 场内无敌人：飞满寿命
+	for i in 210:
+		d.step_manual(1.0 / 60.0)
+	run("W07 到期原地烧尽生成火池", d.fire_eggs.pools.size() == 1, str(d.fire_eggs.pools.size()))
+	if d.fire_eggs.pools.size() == 1:
+		run("W07 到期火池在射程末端",
+				d.fire_eggs.pools[0].position.distance_to(Vector2(-480, 0)) < 8.0,
+				str(d.fire_eggs.pools[0].position))
+	_free_arena(d)
+
+	var e4 := _new_arena()
+	e4.spawner.enabled = false
+	e4.projectiles.auto_fire = false
+	Input.action_press("move_right")
+	for i in 120:
+		e4.step_manual(1.0 / 60.0)
+	Input.action_release("move_right")
+	run("W07 前置：玩家右移至 440", absf(e4.player.position.x - 440.0) < 1.5, str(e4.player.position))
+	e4.fire_eggs.activate(e4.fire_egg_rule_base.duplicate())
+	e4.fire_eggs.auto_fire = false
+	e4.fire_eggs.fire_dir(Vector2.RIGHT)
+	for i in 90:
+		e4.step_manual(1.0 / 60.0)
+	run("W07 撞墙生成火池", e4.fire_eggs.pools.size() == 1, str(e4.fire_eggs.pools.size()))
+	if e4.fire_eggs.pools.size() == 1:
+		var pp: Vector2 = e4.fire_eggs.pools[0].position
+		run("W07 池心钳制整池在场内", absf(pp.x - 576.0) < 1.0
+				and pp.x + 40.0 <= Arena.arena_inner_rect().end.x + 0.01, str(pp))
+	_free_arena(e4)
+
+	var f := _new_arena()
+	f.spawner.enabled = false
+	f.projectiles.auto_fire = false
+	f.fire_eggs.activate(f.fire_egg_rule_base.duplicate())
+	f.fire_eggs.auto_fire = false
+	for i in 13:
+		f.fire_eggs.fire_dir(Vector2.LEFT)
+	for i in 200:
+		f.step_manual(1.0 / 60.0)
+	run("W07 同屏火池上限 12", f.fire_eggs.pools.size() == 12, str(f.fire_eggs.pools.size()))
+	_free_arena(f)
+
+	EventBus.attack_hit.disconnect(on_hit)
+	EventBus.attack_fired.disconnect(on_fired)
 
 
 func _test_experiment_a11_a12_a13() -> void:

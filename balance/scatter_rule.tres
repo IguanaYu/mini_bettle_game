@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ScatterRule" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://common/scatter_rule.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+element = 0
+damage = 12.0
+fire_interval = 1.4
+aim_range = 900.0
+projectile_speed = 480.0
+lifetime = 2.0
+hit_radius = 8.0
+pierce = 0
+pellet_count = 3
+spread_deg = 24.0

@@ -7,7 +7,6 @@ var rule: AttackRule            # 运行时副本：升级与试验面板改这�
 var current_visual: VfxProfile  # A/B 切换只影响之后生成的弹体（设计文档 9.3）
 var auto_fire := true
 var cooldown := 0.0
-var next_attack_id := 0
 var balls: Array[Fireball] = []
 
 
@@ -66,18 +65,23 @@ func fire_forward() -> Fireball:
 	return fire_dir(Vector2.RIGHT)
 
 
-func fire_dir(dir: Vector2) -> Fireball:
-	next_attack_id += 1
+func fire_dir(dir: Vector2, r: AttackRule = null, with_muzzle := true,
+		emit_event := true) -> Fireball:
+	## r 非空时以外部规则快照生成（散射火球复用本推进管线，火系武器扩展设计 W01）；
+	## with_muzzle/emit_event 供齐射避免逐弹重复表现，由调用方统一发一次。
+	var rr := r if r != null else rule
 	var b := Fireball.new()
-	b.attack_id = next_attack_id
-	b.rule = rule            # 发射时快照
+	b.attack_id = arena.alloc_attack_id()
+	b.rule = rr             # 发射时快照
 	b.visual = current_visual
 	b.position = arena.player.position
 	b.dir = dir if dir.length() > 0.0001 else Vector2.RIGHT
 	arena.projectiles_node.add_child(b)
 	balls.append(b)
-	arena.fx_layer.spawn_muzzle(b.position, b.dir, current_visual)
-	EventBus.attack_fired.emit(rule.element, b.attack_id, b.position, b.dir)
+	if with_muzzle:
+		arena.fx_layer.spawn_muzzle(b.position, b.dir, current_visual)
+	if emit_event:
+		EventBus.attack_fired.emit(rr.element, b.attack_id, b.position, b.dir)
 	return b
 
 
