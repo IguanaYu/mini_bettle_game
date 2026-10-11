@@ -90,6 +90,12 @@ func _test_movement_a01() -> void:
 	Input.action_release("move_right")
 	var dist := p.position.distance_to(origin)
 	run("斜向 1 秒也移动约 220px", absf(dist - 220.0) < 1.5, "dist=%.1f" % dist)
+	# 封闭场地（Brotato 式）：持续向右撞墙，钳制位 = (640-24) - 半径12 = 604
+	Input.action_press("move_right")
+	for i in 180:
+		a.step_manual(1.0 / 60.0)
+	Input.action_release("move_right")
+	run("玩家被右墙钳制在 604", absf(p.position.x - 604.0) < 0.1, "x=%.1f" % p.position.x)
 	_free_arena(a)
 
 

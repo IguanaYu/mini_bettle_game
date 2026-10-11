@@ -56,15 +56,24 @@ func _walk_survival() -> void:
 	_check("HUD 显示", main_scene.hud.visible)
 	_check("满血开始", main_scene.arena.player.hp == 100)
 
-	# 移动 + 相机跟随（按住 D 90 帧；高刷屏帧长更短，阈值按 0.75 秒估算）
+	# 移动 + 相机（按住 D 真实 1.0 秒；帧数计时会随遮挡/高刷漂移，必须按时间）
 	var x0: float = main_scene.arena.player.position.x
-	await _hold_key(KEY_D, 90)
+	await _hold_key_for(KEY_D, 1.0)
 	await _frames(5)
 	_shot("03_moved_right")
 	_check("按住 D 向右移动", main_scene.arena.player.position.x > x0 + 150.0,
 			"dx=%.0f" % (main_scene.arena.player.position.x - x0))
-	_check("相机跟随玩家", main_scene.arena.camera.position.distance_to(
-			main_scene.arena.player.position) < 1.0)
+	# 封闭场地：传送到右墙边再按住 D，应被钳在墙内（钳制位 = 616 - 半径12 = 604）。
+	# 传送贴墙可避免窗口遮挡/时钟丢失导致的绝对距离漂移；输入本身已由上一步验证。
+	main_scene.arena.player.position = Vector2(596.0, 0)
+	await _frames(2)
+	await _hold_key_for(KEY_D, 0.6)
+	await _frames(5)
+	_shot("03b_wall_clamp")
+	var px: float = main_scene.arena.player.position.x
+	_check("玩家被右墙钳制", px >= 596.0 and px <= 606.0, "x=%.0f" % px)
+	_check("相机固定于场地中心", main_scene.arena.camera.position.distance_to(
+			Vector2.ZERO) < 1.0)
 
 	# 战斗期：贪心捡经验（朝最近宝石走位，同时躲开围殴），最多 70 秒
 	# 注意：lambda 按值捕获 int，计数器必须用容器
@@ -381,6 +390,21 @@ func _hold_key(keycode: Key, frames: int) -> void:
 	press.pressed = true
 	Input.parse_input_event(press)
 	await _frames(frames)
+	var release: InputEventKey = press.duplicate()
+	release.pressed = false
+	Input.parse_input_event(release)
+
+
+func _hold_key_for(keycode: Key, seconds: float) -> void:
+	## 真实时间按键：帧数计时在窗口被遮挡（不限帧）/高刷屏下会漂移
+	var press := InputEventKey.new()
+	press.keycode = keycode
+	press.physical_keycode = keycode
+	press.pressed = true
+	Input.parse_input_event(press)
+	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
 	var release: InputEventKey = press.duplicate()
 	release.pressed = false
 	Input.parse_input_event(release)

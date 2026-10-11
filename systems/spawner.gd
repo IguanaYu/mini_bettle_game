@@ -1,6 +1,7 @@
 class_name Spawner
 extends Node
-## 分段刷怪：间隔、存活上限、镜头外生成、超距回收（设计文档 5.2，验收 A15）。
+## 分段刷怪：间隔、存活上限、墙边生成、超距回收（设计文档 5.2，验收 A15）。
+## 封闭竞技场：敌人从四面墙内侧出现（Brotato 式），不再依赖镜头外生成。
 
 var arena: Arena
 var curve: SpawnCurve
@@ -47,13 +48,14 @@ func _spawn(phase: SpawnPhaseDef) -> void:
 	EventBus.enemy_spawned.emit(e.id)
 
 
-## 镜头四边之外至少 64px 的随机位置（设计文档 5.2）
+## 四面墙内侧的随机位置：沿边随机 + 离墙 24~96px 内缩（封闭场地，Brotato 式）
 func _edge_position() -> Vector2:
-	var cam := arena.camera.position
-	var half := Vector2(640.0, 360.0)  # 设计视口一半；窗口缩放不改世界参数
-	var margin := Rng.randf_range(64.0, 160.0)
+	var inner := Arena.arena_inner_rect()
+	var margin := Rng.randf_range(Arena.WALL, Arena.WALL + 72.0)
+	var x := Rng.randf_range(inner.position.x + margin, inner.end.x - margin)
+	var y := Rng.randf_range(inner.position.y + margin, inner.end.y - margin)
 	match Rng.randi_range(0, 3):
-		0: return cam + Vector2(-half.x - margin, Rng.randf_range(-half.y, half.y))
-		1: return cam + Vector2(half.x + margin, Rng.randf_range(-half.y, half.y))
-		2: return cam + Vector2(Rng.randf_range(-half.x, half.x), -half.y - margin)
-		_: return cam + Vector2(Rng.randf_range(-half.x, half.x), half.y + margin)
+		0: return Vector2(inner.position.x + margin, y)
+		1: return Vector2(inner.end.x - margin, y)
+		2: return Vector2(x, inner.position.y + margin)
+		_: return Vector2(x, inner.end.y - margin)

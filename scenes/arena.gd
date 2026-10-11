@@ -3,6 +3,16 @@ extends Node2D
 ## 战斗场地（生存与试验共用）。世界推进的唯一入口：_process → _step（开发方案 4.2）。
 ## 一切 gameplay 更新（玩家/敌人/弹体/特效/经验）都在 _step 内按固定顺序推进，
 ## 测试通过 step_manual 以固定步长驱动。
+##
+## 封闭竞技场（Brotato 式）：固定大小、四面墙、全场可见，相机固定在场心。
+
+const ARENA_HALF := Vector2(640.0, 360.0)  # 场地半尺寸 = 设计视口 1280x720
+const WALL := 24.0                          # 墙厚；可行动区为内区矩形
+
+
+static func arena_inner_rect() -> Rect2:
+	## 可行动区（墙内侧）；刷怪、钳制、弹体消散都以它为准
+	return Rect2(-ARENA_HALF + Vector2(WALL, WALL), (ARENA_HALF - Vector2(WALL, WALL)) * 2.0)
 
 var is_experiment := false
 var world_time := 0.0          # 试验模式的世界时钟（生存模式用 Game.run.elapsed）
@@ -27,7 +37,7 @@ var visual_a_base: VfxProfile      # 视觉基线：试验改参后从这里还�
 var visual_b_base: VfxProfile
 var visual_a: VfxProfile
 var visual_b: VfxProfile
-var camera_static := false     # 试验模式固定镜头
+var camera_static := false     # 兼容保留：试验模式置 true（A11/A13 断言）；相机现在恒定不动
 
 
 func _ready() -> void:
@@ -107,16 +117,15 @@ func _step(delta: float) -> void:
 		return  # 结算后世界停推进
 
 	player.tick(delta)
+	_clamp_to_arena(player, player.radius)
 	spawner.tick(delta, _elapsed())
 	projectiles.tick(delta)
 	xp_manager.tick(delta)
 	_contact_check()
 	for e in enemies:
-		e.tick(delta)
+		e.tick(delta)  # 敌人场内生成、追击场内玩家，直线追击不会出界（A15 回收测试依赖可传送到场外）
 	_recycle_far_enemies()
 	fx_layer.tick(delta)
-	if not camera_static:
-		camera.position = player.position
 	_sweep_dead()
 
 
@@ -124,6 +133,14 @@ func _elapsed() -> float:
 	if is_experiment or Game.run == null:
 		return world_time
 	return Game.run.elapsed
+
+
+func _clamp_to_arena(p: Node2D, radius: float) -> void:
+	## 封闭场地：实体中心钳在内区内缩 radius 处（墙阻拦）
+	var r := arena_inner_rect().grow(-radius)
+	if r.size.x <= 0.0 or r.size.y <= 0.0:
+		return
+	p.position = p.position.clamp(r.position, r.end)
 
 
 func live_enemy_count() -> int:

@@ -100,6 +100,10 @@ func _advance(b: Fireball, delta: float) -> void:
 	if b.age >= b.rule.lifetime:
 		_expire(b)
 		return
+	# 撞墙消散：封闭场地内弹体不出界（Brotato 式）
+	if not Arena.arena_inner_rect().has_point(b.position):
+		_expire(b)
+		return
 	# 扫掠检测：本帧路径上的最早交点（验收 A03）
 	var best_t := 1e9
 	var best_enemy: Enemy = null
