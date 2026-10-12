@@ -4,12 +4,17 @@ extends Node2D
 ## 特效由 Arena._step → fx_layer.tick 驱动，特效结束永远不是伤害结算条件。
 
 func fx_count() -> int:
-	return get_child_count()
+	var count := 0
+	for fx in get_children():
+		if not fx.done and not fx.is_queued_for_deletion():
+			count += 1
+	return count
 
 
 func tick(delta: float) -> void:
 	for c in get_children():
-		c.tick(delta)
+		if not c.is_queued_for_deletion():
+			c.tick(delta)
 	for c in get_children():
 		if c.done:
 			c.queue_free()
@@ -46,6 +51,8 @@ func spawn_trail(points: Array, profile: VfxProfile) -> void:
 class FxBase:
 	extends Node2D
 	var done := false
+	func _ready() -> void:
+		GameArt.apply_world_material(self)
 	func tick(_delta: float) -> void:
 		pass
 
@@ -56,13 +63,18 @@ class MuzzleFx:
 	var life := 0.06
 	var sparks := false
 	var spark_dirs: Array[Vector2] = []
+	var brightness := 1.0
+	var radius := 10.0
 
 	func setup(pos: Vector2, dir: Vector2, profile: VfxProfile) -> void:
-		position = pos
+		position = pos + dir * 12.0 + Vector2(0, -7)
+		rotation = dir.angle()
 		life = maxf(profile.muzzle_flash_time, 0.01)
 		sparks = profile.muzzle_sparks
+		brightness = profile.brightness
+		radius = profile.body_radius
 		for i in 6:
-			spark_dirs.append(dir.rotated(Rng.randf_range(-0.9, 0.9)))
+			spark_dirs.append(Vector2.RIGHT.rotated(lerpf(-0.9, 0.9, float(i) / 5.0)))
 
 	func tick(delta: float) -> void:
 		t += delta
@@ -72,11 +84,14 @@ class MuzzleFx:
 
 	func _draw() -> void:
 		var k := clampf(1.0 - t / life, 0.0, 1.0)
-		draw_circle(Vector2.ZERO, 6.0 + 8.0 * (1.0 - k), Palette.c(Color(1.0, 0.8, 0.4, 0.8 * k)))
+		var size := radius * (1.8 + 0.8 * (1.0 - k))
+		draw_texture_rect(GameArt.fire(0), Rect2(-Vector2.ONE * size * 0.5, Vector2.ONE * size),
+				false, Color(brightness, brightness, brightness, k))
 		if sparks:
+			var spark_k := clampf(1.0 - t / (life + 0.1), 0.0, 1.0)
 			for d in spark_dirs:
-				var tip: Vector2 = d * (10.0 + 55.0 * t * 10.0)
-				draw_line(d * 6.0, tip, Palette.c(Color(1.0, 0.6, 0.2, k)), 2.0)
+				var tip: Vector2 = d * (6.0 + 160.0 * t)
+				draw_line(tip - d * 4.0, tip, Palette.c(Color(1.0, 0.7, 0.25, spark_k)), 1.3, true)
 
 
 class HitFx:
@@ -88,16 +103,18 @@ class HitFx:
 	var ember_life := 0.15
 	var embers: Array[Vector2] = []
 	var weak := false
+	var brightness := 1.0
 
 	func setup(pos: Vector2, profile: VfxProfile, p_weak: bool) -> void:
 		position = pos
 		weak = p_weak
+		brightness = profile.brightness
 		life = 0.12 if weak else maxf(profile.hit_flash_time, 0.01)
 		max_r = profile.body_radius + 4.0 if weak else profile.hit_max_radius
 		base_r = profile.body_radius
 		ember_life = 0.0 if weak else profile.ember_lifetime
 		for i in 6:
-			embers.append(Vector2(Rng.randf_range(-1, 1), Rng.randf_range(-1, 1)).normalized())
+			embers.append(Vector2.from_angle(float(i) * TAU / 6.0 + pos.x * 0.01 + pos.y * 0.007))
 
 	func tick(delta: float) -> void:
 		t += delta
@@ -107,15 +124,21 @@ class HitFx:
 
 	func _draw() -> void:
 		var k := clampf(1.0 - t / life, 0.0, 1.0)
-		var r: float = lerpf(base_r, max_r, 1.0 - k)
-		var strong := 0.85 if not weak else 0.3
-		draw_circle(Vector2.ZERO, r, Palette.c(Color(1.0, 0.7, 0.25, strong * k)))
-		draw_arc(Vector2.ZERO, r, 0.0, TAU, 24, Palette.c(Color(1.0, 0.9, 0.5, strong * k)), 2.0)
+		var progress := 1.0 - k
+		var r: float = lerpf(base_r * 0.65, max_r, 1.0 - pow(k, 3.0))
+		var alpha := k * (0.55 if weak else 1.0)
+		draw_set_transform(Vector2.ZERO, progress * 0.18, Vector2.ONE)
+		draw_texture_rect(GameArt.fire(3 if weak else 2), Rect2(-Vector2.ONE * r, Vector2.ONE * r * 2.0),
+				false, Color(brightness, brightness, brightness, alpha))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if not weak and t < 0.04:
+			draw_circle(Vector2.ZERO, 3.0 * k, Palette.c(Color(1.0, 0.96, 0.75, k * 0.65)))
 		if ember_life > 0.0 and t < ember_life:
 			var ek := clampf(1.0 - t / ember_life, 0.0, 1.0)
 			for d in embers:
-				draw_circle(d * (20.0 + 110.0 * t), 2.5 * ek + 1.0,
-						Palette.c(Color(1.0, 0.45, 0.10, 0.8 * ek)))
+				var tip := d * (base_r * 0.5 + 70.0 * t)
+				draw_line(tip - d * (1.0 + 3.0 * ek), tip,
+						Palette.c(Color(1.0, 0.68, 0.20, 0.7 * ek)), 1.0 + ek, true)
 
 
 class TrailGhost:
@@ -123,10 +146,14 @@ class TrailGhost:
 	var t := 0.0
 	var life := 0.12
 	var points: Array[Vector2] = []
+	var radius := 10.0
+	var brightness := 1.0
 
 	func setup(pts: Array, profile: VfxProfile) -> void:
 		points.assign(pts)
 		life = maxf(profile.trail_lifetime, 0.01)
+		radius = profile.body_radius
+		brightness = profile.brightness
 
 	func tick(delta: float) -> void:
 		t += delta
@@ -137,8 +164,8 @@ class TrailGhost:
 	func _draw() -> void:
 		var fade := clampf(1.0 - t / life, 0.0, 1.0)
 		var n := points.size()
-		for i in n:
+		for i in range(0, n, 3):
 			var k := float(i + 1) / float(n)
-			draw_circle(points[i] - position, 5.5 * k,
-					Palette.c(Color(1.0, 0.5, 0.15, 0.3 * k * fade)))
-		position = Vector2.ZERO  # ghost 挂在世界原点下，用世界坐标绘制
+			var size := radius * (0.5 + k)
+			draw_texture_rect(GameArt.fire(3), Rect2(points[i] - Vector2.ONE * size * 0.5, Vector2.ONE * size),
+					false, Color(brightness, brightness, brightness, 0.28 * k * fade))

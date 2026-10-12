@@ -64,6 +64,7 @@ func fire_dir(dir: Vector2) -> FireEgg:
 	var egg := FireEgg.new()
 	egg.attack_id = arena.alloc_attack_id()
 	egg.rule = rule          # 发射时快照
+	egg.visual = arena.projectiles.current_visual
 	egg.position = arena.player.position
 	egg.dir = dir if dir.length() > 0.0001 else Vector2.RIGHT
 	arena.projectiles_node.add_child(egg)
@@ -103,8 +104,8 @@ func _advance(egg: FireEgg, delta: float) -> void:
 
 func _detonate(egg: FireEgg) -> void:
 	egg.dead = true
-	arena.fx_layer.spawn_hit(egg.position, arena.visual_a)
-	_spawn_pool(_clamp_pool_center(egg.position, egg.rule.pool_radius), egg.rule)
+	arena.fx_layer.spawn_hit(egg.position, egg.visual)
+	_spawn_pool(_clamp_pool_center(egg.position, egg.rule.pool_radius), egg.rule, egg.visual)
 
 
 func _clamp_pool_center(pos: Vector2, pool_radius: float) -> Vector2:
@@ -115,12 +116,13 @@ func _clamp_pool_center(pos: Vector2, pool_radius: float) -> Vector2:
 	return pos.clamp(r.position, r.end)
 
 
-func _spawn_pool(pos: Vector2, r: FireEggRule) -> void:
+func _spawn_pool(pos: Vector2, r: FireEggRule, visual: VfxProfile = null) -> void:
 	if pools.size() >= r.max_pools:
 		# 同屏上限：最旧一片提前熄灭（防长局对象积累，火系武器扩展设计 W04 条款）
 		pools[0].dead = true
 	var pool := FirePool.new()
 	pool.rule = r
+	pool.visual = visual if visual != null else arena.projectiles.current_visual
 	pool.position = pos
 	pool.setup_visual()
 	arena.projectiles_node.add_child(pool)

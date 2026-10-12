@@ -37,8 +37,8 @@ func tick(delta: float) -> void:
 	cooldown += rule.fire_interval
 
 
-func fire_volley(target: Node2D) -> void:
-	var base: Vector2 = (target.position - arena.player.position).normalized()
+func fire_volley(target: Node2D = null) -> void:
+	var base: Vector2 = (target.position - arena.player.position).normalized() if target != null else Vector2.RIGHT
 	var n := maxi(1, rule.pellet_count)
 	var first_id := -1
 	for i in n:

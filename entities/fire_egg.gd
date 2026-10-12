@@ -7,11 +7,17 @@ const TRAIL_LIFE := 0.22
 
 var attack_id := -1
 var rule: FireEggRule     # 发射时快照
+var visual: VfxProfile
 var dir := Vector2.RIGHT
 var age := 0.0
 var dead := false
 var trail_pos: Array[Vector2] = []
 var trail_age: Array[float] = []
+
+
+func _ready() -> void:
+	z_index = 20
+	GameArt.apply_world_material(self)
 
 
 func record_trail() -> void:
@@ -23,18 +29,22 @@ func record_trail() -> void:
 
 
 func _draw() -> void:
-	# 尾迹：越旧的点越小越淡
+	if dead:
+		return
+	var radius := visual.body_radius * 1.2 if visual != null else rule.hit_radius
+	var brightness := visual.brightness if visual != null else 1.0
 	var n := trail_pos.size()
-	for i in n:
+	for i in range(0, n, 4):
 		var k := float(i + 1) / float(n)
-		draw_circle(trail_pos[i] - position, 6.0 * k,
-				Palette.c(Color(1.0, 0.50, 0.15, 0.30 * k)))
-	# 蛋体：沿飞行方向拉长的椭圆；轻微呼吸脉动
+		var side := 8.0 * k + 3.0
+		draw_texture_rect(GameArt.fire(3), Rect2(trail_pos[i] - position - Vector2.ONE * side * 0.5,
+				Vector2.ONE * side), false, Color(brightness, brightness, brightness, 0.28 * k))
 	var pulse := 1.0 + 0.06 * sin(age * 9.0)
-	draw_set_transform(Vector2.ZERO, dir.angle(), Vector2(1.18 * pulse, 0.88 * pulse))
-	draw_circle(Vector2.ZERO, rule.hit_radius, Palette.c(Color(1.0, 0.42, 0.10)))
-	draw_circle(Vector2.ZERO, rule.hit_radius * 0.58, Palette.c(Color(1.0, 0.78, 0.38)))
+	draw_set_transform(Vector2.ZERO, dir.angle(), Vector2(pulse, pulse))
+	var size := Vector2(radius * 3.4, radius * 2.7)
+	draw_texture_rect(GameArt.fire(1), Rect2(Vector2(-size.x * 0.74, -size.y * 0.5), size),
+			false, Color(brightness, brightness, brightness))
+	draw_set_transform(Vector2.ZERO, age * 1.5, Vector2.ONE)
+	draw_texture_rect(GameArt.fire(3), Rect2(-radius, -radius, radius * 2.0, radius * 2.0),
+			false, Color(brightness, brightness, brightness, 0.5))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# 高光与底部阴影点：让"蛋"有体积感
-	draw_circle(Vector2(2.5, -2.5), 2.0, Palette.c(Color(1.0, 0.93, 0.72, 0.9)))
-	draw_circle(Vector2(-3.0, 3.0), 1.6, Palette.c(Color(0.9, 0.30, 0.05, 0.7)))

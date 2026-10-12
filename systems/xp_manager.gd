@@ -34,6 +34,7 @@ func tick(delta: float) -> void:
 		return  # 试验靶场不掉经验、不升级（设计文档 9.1）
 	var p := arena.player
 	for g in gems:
+		g.tick(delta)
 		if not g.attracted and g.position.distance_to(p.position) < p.pickup_radius:
 			g.attracted = true
 		if g.attracted:

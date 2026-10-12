@@ -22,3 +22,7 @@ func _draw() -> void:
 	for b in arena.projectiles.balls:
 		if not b.dead:
 			draw_arc(b.position, b.rule.hit_radius, 0.0, TAU, 24, Color(1.0, 0.4, 0.4, 0.9), 1.0)
+	for egg in arena.fire_eggs.eggs:
+		draw_arc(egg.position, egg.rule.hit_radius, 0.0, TAU, 24, Color(1.0, 0.6, 0.2, 0.9), 1.0)
+	for pool in arena.fire_eggs.pools:
+		draw_arc(pool.position, pool.rule.pool_radius, 0.0, TAU, 40, Color(1.0, 0.6, 0.2, 0.8), 1.0)

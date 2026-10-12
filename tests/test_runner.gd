@@ -44,6 +44,7 @@ func _ready() -> void:
 	_test_candidates_a14()
 	_test_weapons_w01_w07()
 	_test_experiment_a11_a12_a13()
+	_test_fire_art()
 	_test_ui_smoke()
 	await _test_menu_click_regression()
 	await _test_experiment_panel_regression()
@@ -753,6 +754,77 @@ func _is_picked_above(a: Control, b: Control) -> bool:
 			return chain_a[i].get_index() > chain_b[i].get_index()
 	# 未分叉：链短者是长者的祖先，更深者在上面
 	return chain_a.size() > chain_b.size()
+
+
+func _test_fire_art() -> void:
+	section("火系美术与试验切换回归")
+	run("角色贴图含透明背景", GameArt.PLAYER.get_image().get_pixel(0, 0).a == 0.0)
+	run("四种火焰阶段均可读取", GameArt.fire(0).get_width() > 0 and GameArt.fire(1).get_width() > 0
+			and GameArt.fire(2).get_width() > 0 and GameArt.fire(3).get_width() > 0)
+	var a := _new_arena()
+	Game.enter_experiment()
+	var ctl := ExperimentController.new()
+	add_child(ctl)
+	ctl.setup(a)
+	run("角色和靶子的受击材质独立", a.player.art_material != a.enemies[0].art_material)
+	var rng_state := Rng.game_rng.state
+	a.fx_layer.spawn_muzzle(Vector2.ZERO, Vector2.RIGHT, a.visual_b)
+	a.fx_layer.spawn_hit(Vector2.ZERO, a.visual_b)
+	var patch := FirePool.new()
+	patch.rule = a.fire_egg_rule_base
+	patch.setup_visual()
+	patch.free()
+	run("特效与火池动画不消耗玩法随机数", Rng.game_rng.state == rng_state)
+	ctl.reset_world()
+	ctl.single_fire()
+	var first := a.projectiles.balls[0]
+	var old_profile := first.visual
+	ctl.set_visual(GameEnums.VisualVersion.B)
+	ctl.single_fire()
+	run("切换 B 后已有火球保留 A 版", first.visual == old_profile and first.visual != a.visual_b)
+	run("切换 B 后新火球使用 B 版", a.projectiles.balls[1].visual == a.visual_b)
+	ctl.set_fire_weapon(GameEnums.FireWeapon.SCATTER)
+	ctl.single_fire()
+	run("试验散射一次生成三发", a.projectiles.balls.size() == 3 and a.fire_eggs.eggs.is_empty())
+	ctl.set_auto_fire(true)
+	run("散射连续触发仅激活当前武器", a.scatter.active and a.scatter.auto_fire
+			and not a.projectiles.auto_fire and not a.fire_eggs.active)
+	ctl.set_auto_fire(false)
+	ctl.set_fire_weapon(GameEnums.FireWeapon.FIRE_EGG)
+	run("换到火蛋清空上一种弹体", a.projectiles.balls.is_empty())
+	ctl.set_playback(GameEnums.PlaybackRate.PAUSED)
+	ctl.single_fire()
+	run("暂停时火蛋不能发射", a.fire_eggs.eggs.is_empty())
+	ctl.set_playback(GameEnums.PlaybackRate.NORMAL_1)
+	ctl.single_fire()
+	run("试验火蛋单发正常", a.fire_eggs.eggs.size() == 1)
+	var egg_profile := a.fire_eggs.eggs[0].visual
+	ctl.set_visual(GameEnums.VisualVersion.A)
+	for i in 112:
+		a.step_manual(1.0 / 60.0)
+	run("火蛋产生火池并保留发射时的视觉", a.fire_eggs.pools.size() == 1
+			and a.fire_eggs.pools[0].visual == egg_profile)
+	run("火蛋伤害参数指向每跳伤害", ctl.current_rule() is FireEggRule
+			and ctl.rule_property("damage") == "pool_damage")
+	ctl.current_rule().set(ctl.rule_property("damage"), 13.0)
+	run("调火蛋参数不改普通火球伤害", a.fire_eggs.rule.pool_damage == 13.0
+			and a.projectiles.rule.damage == 20.0)
+	ctl.reset_world()
+	run("重置清除弹体火池和特效", a.projectiles.balls.is_empty() and a.fire_eggs.eggs.is_empty()
+			and a.fire_eggs.pools.is_empty() and a.fx_layer.fx_count() == 0)
+	run("重置恢复火蛋规则", a.fire_eggs.rule.pool_damage == a.fire_egg_rule_base.pool_damage)
+	var player_time := a.player.visual_time
+	Game.set_state(GameEnums.GameState.PAUSED)
+	a.step_manual(0.5)
+	run("暂停时角色动画时钟停止", a.player.visual_time == player_time)
+	Game.exit_experiment()
+	remove_child(ctl)
+	ctl.queue_free()
+	_free_arena(a)
+	var next := _new_arena()
+	run("试验武器选择不带入生存", not next.scatter.active and not next.fire_eggs.active
+			and next.projectiles.auto_fire)
+	_free_arena(next)
 
 
 # ---------- 试验面板遮挡回归（全功能走查实测发现的两个 bug）----------

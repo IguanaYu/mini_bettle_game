@@ -12,6 +12,7 @@ var playback: GameEnums.PlaybackRate = GameEnums.PlaybackRate.NORMAL_1
 var invincible := false
 var lock_position := false
 var visual_version: GameEnums.VisualVersion = GameEnums.VisualVersion.A
+var fire_weapon: GameEnums.FireWeapon = GameEnums.FireWeapon.FIREBALL
 var auto_fire := false
 var seed_value := 20261011
 var target_count := 12   # 固定靶群数量（10~50，设计文档 9.1）
@@ -65,7 +66,10 @@ func reset_world() -> void:
 	Rng.reseed(seed_value)
 	# 攻击规则从基础配置重建（面板改过的副本作废）
 	arena.projectiles.set_rule(arena.fireball_rule_base.duplicate())
-	arena.projectiles.auto_fire = auto_fire
+	arena.scatter.rule = arena.scatter_rule_base.duplicate()
+	arena.scatter.cooldown = 0.0
+	arena.fire_eggs.rule = arena.fire_egg_rule_base.duplicate()
+	_sync_weapons()
 	arena.restore_visuals()
 	_set_visual(visual_version)
 	# 固定发射点：玩家回原点
@@ -81,14 +85,14 @@ func reset_world() -> void:
 
 
 func _build_preset() -> void:
-	## 靶子位置避开右侧面板（约 320px 宽）：世界坐标 |x| ≤ 300 时不会被面板遮挡
+	## 给木靶贴图留出边缘余量，避免靶群与墙或右侧面板重叠。
 	match preset:
 		GameEnums.ExperimentPreset.SINGLE_TARGET:
 			arena.spawn_target(Vector2(280, 0), true)
 		GameEnums.ExperimentPreset.TARGET_ARRAY:
 			for i in target_count:
 				var ang := TAU * float(i) / float(target_count)
-				arena.spawn_target(Vector2(300, 0).rotated(ang), true)
+				arena.spawn_target(Vector2(270, 0).rotated(ang), true)
 		GameEnums.ExperimentPreset.LIVE_CHASE:
 			pass  # spawner 已开启
 
@@ -119,15 +123,50 @@ func single_fire() -> void:
 			panel.show_hint("世界暂停中：先恢复播放或开启慢放再触发")
 		return
 	var t := arena.projectiles.find_target()
-	if t != null:
-		arena.projectiles.fire_at(t)
-	else:
-		arena.projectiles.fire_forward()
+	match fire_weapon:
+		GameEnums.FireWeapon.FIREBALL:
+			if t != null:
+				arena.projectiles.fire_at(t)
+			else:
+				arena.projectiles.fire_forward()
+		GameEnums.FireWeapon.SCATTER:
+			arena.scatter.fire_volley(t)
+		GameEnums.FireWeapon.FIRE_EGG:
+			if t != null:
+				arena.fire_eggs.fire_at(t)
+			else:
+				arena.fire_eggs.fire_dir(Vector2.RIGHT)
 
 
 func set_auto_fire(b: bool) -> void:
 	auto_fire = b
-	arena.projectiles.auto_fire = b
+	_sync_weapons()
+
+
+func set_fire_weapon(weapon: GameEnums.FireWeapon) -> void:
+	fire_weapon = weapon
+	reset_world()
+
+
+func _sync_weapons() -> void:
+	arena.projectiles.auto_fire = auto_fire and fire_weapon == GameEnums.FireWeapon.FIREBALL
+	arena.scatter.active = fire_weapon == GameEnums.FireWeapon.SCATTER
+	arena.scatter.auto_fire = auto_fire
+	arena.fire_eggs.active = fire_weapon == GameEnums.FireWeapon.FIRE_EGG
+	arena.fire_eggs.auto_fire = auto_fire
+
+
+func current_rule() -> Resource:
+	match fire_weapon:
+		GameEnums.FireWeapon.SCATTER:
+			return arena.scatter.rule
+		GameEnums.FireWeapon.FIRE_EGG:
+			return arena.fire_eggs.rule
+	return arena.projectiles.rule
+
+
+func rule_property(prop: String) -> String:
+	return "pool_damage" if prop == "damage" and fire_weapon == GameEnums.FireWeapon.FIRE_EGG else prop
 
 
 # ---------- 视觉与试验条件 ----------

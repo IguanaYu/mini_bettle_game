@@ -7,3 +7,4 @@ enum ElementKind { FIRE, LIGHTNING, WATER }
 enum ExperimentPreset { SINGLE_TARGET, TARGET_ARRAY, LIVE_CHASE }
 enum VisualVersion { A, B }
 enum PlaybackRate { PAUSED, SLOW_025, NORMAL_1 }
+enum FireWeapon { FIREBALL, SCATTER, FIRE_EGG }

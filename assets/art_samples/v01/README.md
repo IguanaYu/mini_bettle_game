@@ -9,10 +9,13 @@ First visual direction sample for the top-down survivor / combat VFX practice pr
 Smooth, non-pixel, simplified hand-painted cartoon artwork, a neutral gray stone floor,
 a teal mage, and bright orange/yellow fire shapes.
 
-These are review samples. They are not installed in the main game.
+These were originally review samples. On 2026-10-12 the selected mage, floor and
+four-stage flame atlas were installed in the main game. The original PNGs are preserved.
 The overall preview is an AI-composed style mockup, not an actual gameplay screenshot.
 Object scale in the mockup is illustrative. The practice dummy and blue crystals appear
-only in the mockup and are not separate production assets.
+only in this mockup; the game now uses a separately generated target and code-drawn crystals.
+See ../../art/fire_v01/README.md for the new target, enemy and ground-fire assets,
+and ../../../docs/art_style_fire_v01.md for the style guide and rendered game screenshots.
 
 ## Files
 
@@ -32,8 +35,9 @@ These are four distinct stages, not a finished animation strip.
 - Player silhouette and flame direction are readable in the composed preview.
 - The character currently leans toward a cute, soft hand-painted style.
 - Floor detail can be reduced further to give combat VFX more visual priority.
-- Tile seams, small sprite sizes, hitbox alignment, animation timing, and dense combat
-  readability still need validation when selected assets are integrated into Godot.
+- The original review required tile, small-sprite, hitbox and animation validation.
+  The first integration now has gameplay and actual-render regression checks; it still
+  uses a single idle character sprite and procedural animation, not authored walk frames.
 - PNGs were decoded successfully. Player and fire PNGs contain both transparent and visible pixels.
 
 ## Exact Generation Prompts

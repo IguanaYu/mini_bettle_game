@@ -73,9 +73,11 @@ func _ready() -> void:
 	add_child(projectiles_node)
 
 	fx_layer = FxLayer.new()
+	fx_layer.z_index = 25
 	add_child(fx_layer)
 
 	debug_draw = DebugDraw.new()
+	debug_draw.z_index = 40
 	debug_draw.arena = self
 	debug_draw.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(debug_draw)

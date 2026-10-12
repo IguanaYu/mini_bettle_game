@@ -11,6 +11,7 @@ var mini_bar: HBoxContainer
 var mini_label: Label
 
 var preset_buttons: Array[Button] = []
+var weapon_buttons: Array[Button] = []
 var count_spin: SpinBox
 var cap_spin: SpinBox
 var count_row: HBoxContainer
@@ -49,10 +50,21 @@ func setup(controller: ExperimentController) -> void:
 func _build() -> void:
 	root_panel = PanelContainer.new()
 	root_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	root_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	root_panel.offset_left = -318
 	root_panel.offset_right = -8
 	root_panel.offset_top = 8
 	root_panel.offset_bottom = 8
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.09, 0.09, 0.97)
+	panel_style.border_color = Color(0.28, 0.32, 0.31)
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(4)
+	panel_style.content_margin_left = 4.0
+	panel_style.content_margin_right = 4.0
+	panel_style.content_margin_top = 4.0
+	panel_style.content_margin_bottom = 4.0
+	root_panel.add_theme_stylebox_override("panel", panel_style)
 	add_child(root_panel)
 
 	var outer := VBoxContainer.new()
@@ -84,6 +96,7 @@ func _build() -> void:
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(300, 430)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	outer.add_child(scroll)
 	content = VBoxContainer.new()
@@ -132,11 +145,26 @@ func _build() -> void:
 		ctl.set_playback(GameEnums.PlaybackRate.NORMAL_1))
 	pb_row.add_child(btn_normal)
 
+	content.add_child(_section_label("火系魔法"))
+	var weapon_row := HBoxContainer.new()
+	weapon_row.add_theme_constant_override("separation", 6)
+	content.add_child(weapon_row)
+	var weapon_group := ButtonGroup.new()
+	var weapon_names := ["火球", "散射", "火蛋"]
+	for i in 3:
+		var button := Ui.button(weapon_names[i], 92, 32)
+		button.toggle_mode = true
+		button.button_group = weapon_group
+		var weapon := i as GameEnums.FireWeapon
+		button.pressed.connect(func() -> void: ctl.set_fire_weapon(weapon))
+		weapon_row.add_child(button)
+		weapon_buttons.append(button)
+
 	# --- 触发 ---
 	content.add_child(_section_label("攻击触发"))
 	var fire_row := HBoxContainer.new()
 	content.add_child(fire_row)
-	var fire_btn := Ui.button("单次触发（空格）", 150, 34)
+	var fire_btn := Ui.button("单次触发", 110, 34)
 	fire_btn.pressed.connect(func() -> void: ctl.single_fire())
 	fire_row.add_child(fire_btn)
 	auto_check = CheckButton.new()
@@ -145,7 +173,7 @@ func _build() -> void:
 	fire_row.add_child(auto_check)
 
 	# --- 视觉 A/B ---
-	content.add_child(_section_label("火球视觉（只影响新生成）"))
+	content.add_child(_section_label("火系视觉"))
 	var vis_row := HBoxContainer.new()
 	content.add_child(vis_row)
 	btn_a = Ui.button("A 版（基线）", 140, 34)
@@ -170,14 +198,14 @@ func _build() -> void:
 	var seed_row := _row(content, "随机种子")
 	seed_spin = _spin(seed_row, 1, 2147483647, 1, func() -> float: return float(ctl.seed_value),
 			func(v: float) -> void: ctl.seed_value = int(v))
-	var reset_btn := Ui.button("重置（按当前种子）", 300, 36)
+	var reset_btn := Ui.button("重置（按当前种子）", 288, 36)
 	reset_btn.pressed.connect(func() -> void: ctl.reset_world())
 	content.add_child(reset_btn)
 
 	# --- 参数（规则 / 视觉 分页）---
 	content.add_child(_section_label("参数调整"))
 	var tabs := TabContainer.new()
-	tabs.custom_minimum_size = Vector2(296, 218)
+	tabs.custom_minimum_size = Vector2(284, 218)
 	content.add_child(tabs)
 	var rule_tab := VBoxContainer.new()
 	rule_tab.name = "攻击规则"
@@ -215,10 +243,12 @@ func _build() -> void:
 	# --- 计数 ---
 	content.add_child(_section_label("运行观察"))
 	counter_label = Ui.label("", 13)
+	counter_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(counter_label)
 	time_label = Ui.label("", 13)
 	content.add_child(time_label)
 	hint_label = Ui.label("", 13)
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
 	content.add_child(hint_label)
 
@@ -285,6 +315,7 @@ func _spin(parent: Node, minv: float, maxv: float, step: float,
 func _check(parent: Node, text: String, on_toggle: Callable) -> CheckButton:
 	var c := CheckButton.new()
 	c.text = text
+	c.add_theme_font_size_override("font_size", 14)
 	c.toggled.connect(func(b: bool) -> void: on_toggle.call(b))
 	parent.add_child(c)
 	return c
@@ -293,9 +324,9 @@ func _check(parent: Node, text: String, on_toggle: Callable) -> CheckButton:
 func _add_rule_spin(parent: Node, label: String, minv: float, maxv: float, step: float, prop: String) -> void:
 	var row := _row(parent, label)
 	var s := _spin(row, minv, maxv, step,
-		func() -> float: return float(ctl.arena.projectiles.rule.get(prop)),
+		func() -> float: return float(ctl.current_rule().get(ctl.rule_property(prop))),
 		func(v: float) -> void:
-			ctl.arena.projectiles.rule.set(prop, v)
+			ctl.current_rule().set(ctl.rule_property(prop), v)
 			ctl.on_rule_changed())
 	rule_spins.append(s)
 
@@ -311,6 +342,8 @@ func _add_visual_spin(parent: Node, label: String, minv: float, maxv: float, ste
 # ---------- 状态同步 ----------
 
 func sync_from_controller() -> void:
+	for i in weapon_buttons.size():
+		weapon_buttons[i].set_pressed_no_signal(i == ctl.fire_weapon)
 	for i in preset_buttons.size():
 		preset_buttons[i].modulate = Color(1, 1, 0.5) if i == ctl.preset else Color(1, 1, 1)
 	count_row.visible = ctl.preset == GameEnums.ExperimentPreset.TARGET_ARRAY
@@ -339,12 +372,14 @@ func sync_playback_buttons() -> void:
 
 
 func refresh_spins() -> void:
-	var rule: AttackRule = ctl.arena.projectiles.rule
+	var rule := ctl.current_rule()
 	for s in rule_spins:
 		var idx := rule_spins.find(s)
 		# 顺序与 _add_rule_spin 注册顺序一致
 		var props := ["damage", "fire_interval", "projectile_speed", "lifetime", "hit_radius"]
-		s.set_value_no_signal(float(rule.get(props[idx])))
+		s.set_value_no_signal(float(rule.get(ctl.rule_property(props[idx]))))
+		if idx == 0:
+			(s.get_parent().get_child(0) as Label).text = "每跳伤害" if ctl.fire_weapon == GameEnums.FireWeapon.FIRE_EGG else "伤害"
 	var prof := ctl.current_profile()
 	var vprops := ["body_radius", "trail_lifetime", "hit_flash_time", "hit_max_radius", "ember_lifetime", "brightness"]
 	for s in visual_spins:
@@ -365,7 +400,8 @@ func update_counters() -> void:
 	var fps := Engine.get_frames_per_second()
 	var frame_ms := 1000.0 / maxf(float(fps), 1.0)
 	counter_label.text = "敌 %d · 弹 %d · 特效 %d · FPS %d（%.1f ms）" % [
-		a.live_enemy_count(), a.projectiles.live_ball_count(), a.fx_layer.fx_count(), fps, frame_ms]
+		a.live_enemy_count(), a.projectiles.live_ball_count() + a.fire_eggs.eggs.size(),
+		a.fx_layer.fx_count() + a.fire_eggs.pools.size(), fps, frame_ms]
 	time_label.text = "游戏时间 %s　真实时间 %s" % [_fmt_time(ctl.game_time), _fmt_time(ctl.real_time)]
 
 

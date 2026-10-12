@@ -85,3 +85,10 @@ test_fire={
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[shader_globals]
+
+art_grayscale={
+"type": "bool",
+"value": false
+}
